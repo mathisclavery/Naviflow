@@ -12,7 +12,7 @@ from pathlib import Path
 # Racine du projet = dossier parent du package naviflow/.
 # Les chemins sont independants du dossier depuis lequel tu lances tes notebooks.
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
-DATA_DIR = PROJECT_ROOT / "data"
+DATA_DIR = PROJECT_ROOT / "raw_data"
 
 # --------------------------------------------------------------------------- #
 # Detection de format
