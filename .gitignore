@@ -133,3 +133,8 @@ dmypy.json
 .DS_Store
 
 # Project Dir
+
+# ZoneIdentifier
+*:Zone.Identifier
+
+notes.txt
