@@ -37,7 +37,7 @@ YEAR_CONFIG = {
 }
 
 # --------------------------------------------------------------------------- #
-# Colonnes
+# IDFM
 # --------------------------------------------------------------------------- #
 # Colonnes minimales qu'un fichier de validations valide doit contenir.
 EXPECTED_COLS = {
@@ -53,6 +53,37 @@ KEEP_COLS = ["JOUR", "ID_LIEU", "LIBELLE_ARRET", "CATEGORIE_TITRE", "NB_VALD"]
 
 # Suffixe du nom de fichier : {year}-{period}-validations.{ext}
 FILE_KIND = "validations"
+
+# Valeurs sentinelles dans ID_LIEU
+SENTINELLES = [-1, 0, 999999]
+
+# Seuil qui determine si les deux ID se chevauchent ou se succèdent dans le temps
+THRESHOLD_DAYS = 7
+
+# Ratio qui determine si les deux ID qui se chevauchent sont complémentaires ou doublons.
+RATIO_DOUBLON = 0.65
+
+# Force la station juvisy à merge les ID en considerant que ce sont des doublons
+STATION_OVERRIDES = {
+    "juvisy": "merge_max",
+}
+
+# Poles d'echange : regroupement de stations co-localisees
+# Matching par cle de libelle EXACTE. Chaque pole somme ses stations.
+POLES_DEFINITION = {
+    "POLE_CHATELET": ["chatelet", "chatelet les halles", "les halles"],
+    "POLE_LA_DEFENSE": ["defense", "la defense", "la defense grande arche"],
+    "POLE_SAINT_LAZARE": ["auber", "haussmann saint lazare", "havr caumartin",
+                          "havre caumartin", "saint lazare"],
+    "POLE_MONTPARNASSE": ["montparnasse"],
+    "POLE_GARE_DE_LYON": ["gare de lyon"],
+    "POLE_GARE_DU_NORD": ["gare du nord", "magenta"],
+    "POLE_GARE_DE_LEST": ["gare de l est"],
+}
+
+# Base des IDs synthetiques attribues aux poles (negatifs pour ne pas
+# collisionner avec les vrais ID_LIEU). 1er pole = -1000, 2e = -1001, etc.
+POLE_ID_BASE = -1000
 
 # --------------------------------------------------------------------------- #
 # Meteo

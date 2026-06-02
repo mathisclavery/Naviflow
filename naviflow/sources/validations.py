@@ -8,7 +8,12 @@ avec le nombre total de validations.
 import pandas as pd
 
 from naviflow.sources import loaders
-from naviflow.config import DATA_DIR, EXPECTED_COLS, ID_RENAME_MAP, KEEP_COLS
+from naviflow.sources.stations import merge_stations
+from naviflow.config import (DATA_DIR,
+                             EXPECTED_COLS,
+                             ID_RENAME_MAP,
+                             KEEP_COLS,
+                             SENTINELLES)
 
 
 def select_columns(df, keep_cols=KEEP_COLS):
@@ -75,6 +80,37 @@ def aggregate_by_station(df):
           )
     )
 
+
+def drop_sentinelles(df, sentinelles=SENTINELLES):
+    """Retire les lignes a ID_LIEU sentinelle.
+
+    - ID_LIEU -1 / 0 : lieu non identifie.
+    - ID_LIEU 999999 : agregat reseau (pas une station individuelle).
+    """
+    return df[~df["ID_LIEU"].isin(sentinelles)].reset_index(drop=True)
+
+
+def normalize_labels(df):
+    """[Etape 3] Normalise LIBELLE_ARRET.
+    """
+    df = df.copy()
+    s = df["LIBELLE_ARRET"].astype(str)
+    s = s.str.strip()
+    s = s.str.replace(r"\s+", " ", regex=True)
+    s = s.str.title()
+    df["LIBELLE_ARRET"] = s
+    return df
+
+
+def clean(df):
+    """Enchaine les etapes de nettoyage post-agregation.
+    """
+    df = drop_sentinelles(df)
+    df = normalize_labels(df)
+    df = merge_stations(df)
+    return df
+
+
 def load_validations(data_dir=DATA_DIR, aggregate=True, verbose=False):
     """Pipeline complet, de bout en bout.
 
@@ -90,7 +126,12 @@ def load_validations(data_dir=DATA_DIR, aggregate=True, verbose=False):
     formats = loaders.detect_formats(data_dir, EXPECTED_COLS, verbose=verbose)
     data = loaders.load_source(data_dir, formats, EXPECTED_COLS)
     df = concat(data)
-    return aggregate_by_station(df) if aggregate else df
+    if not aggregate:
+        return df
+    df = aggregate_by_station(df)
+    df = clean(df)
+
+    return df
 
 
 def run_quality_checks(df_raw, df_agg):
@@ -103,9 +144,12 @@ def run_quality_checks(df_raw, df_agg):
     print(f"NB_VALD min / max  : {df_raw['NB_VALD'].min()} / {df_raw['NB_VALD'].max()}")
     print(f"Periode            : {df_raw['JOUR'].min():%Y-%m-%d} -> {df_raw['JOUR'].max():%Y-%m-%d}")
 
-    print("\n=== Apres agregation (jour x station) ===")
+    print("\n=== Apres agregation + nettoyage (jour x station) ===")
     print(f"Lignes             : {len(df_agg):,}")
     print(f"Stations distinctes: {df_agg['ID_LIEU'].nunique():,}")
+    print(f"NB_VALD_TOTAL min  : {df_agg['NB_VALD_TOTAL'].min()}  (doit etre > 0)")
+    sentinelles_restantes = df_agg["ID_LIEU"].isin(SENTINELLES).sum()
+    print(f"Sentinelles restantes: {sentinelles_restantes:,}  (doit valoir 0)")
     doublons = df_agg.duplicated(subset=["JOUR", "ID_LIEU"]).sum()
     print(f"Doublons (jour,stat): {doublons:,}  (doit valoir 0)")
     assert doublons == 0, "Doublons detectes apres agregation"
