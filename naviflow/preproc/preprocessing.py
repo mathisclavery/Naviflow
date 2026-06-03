@@ -123,9 +123,8 @@ def transform_weather_features(X: pd.DataFrame) -> np.ndarray:
     Les colonnes continues sont en tête pour faciliter le slicing
     dans le pipeline.
     """
- # Copie défensive + conversion float
+    # Copie défensive + conversion float
     X = X.copy().astype(float)
-
     # Imputation médiane vectorisée
     X = X.fillna(X.median())
 
@@ -165,69 +164,86 @@ def transform_weather_features(X: pd.DataFrame) -> np.ndarray:
         meteo_degradee.values,
     ])
 
-
 # ============================================================
 # PREPROCESSING PIPELINE — Affluence du métro parisien
 # ============================================================
 # --- Transformers sklearn pour nos fonctions custom ---
-time_transformer = FunctionTransformer(
-    transform_time_features,
-    validate=False
-)
+time_transformer = FunctionTransformer(transform_time_features, validate=False)
+weather_transformer = FunctionTransformer(transform_weather_features, validate=False)
 
-weather_transformer = FunctionTransformer(
-    transform_weather_features,
-    validate=False
-)
-
-# --- Scaler pour les features météo continues ---
-# Les 7 premières colonnes météo sont continues :
+# --- Scaler pour les features météo continues --- Les 7 premières colonnes météo sont continues :
 # RR, TN, TX, TM, FFM, amplitude, log_RR
 weather_continuous_scaler = RobustScaler()
 
-# --- ColumnTransformer principal ---
-preprocessor = ColumnTransformer(
+# --- Étape 1 : extraction de toutes les features sur le DataFrame brut ---
+feature_extractor = ColumnTransformer(
     transformers=[
-        # 1) Features temporelles → 11 colonnes
-        ("time", time_transformer, temporal_cols),
-
-        # 2) Features météo → 13 colonnes (dont 7 continues)
-        ("weather_raw", weather_transformer, weather_cols),
-
-        # 3) Scaling des 7 premières colonnes météo
-        ("weather_scale", weather_continuous_scaler, slice(11, 18)),
-
-        # 4) Variables binaires (déjà 0/1)
-        ("binary", "passthrough", binary_cols),
+        ("time",        time_transformer,    temporal_cols),  # → cols 0:11
+        ("weather_raw", weather_transformer, weather_cols),   # → cols 11:24
+        ("binary",      "passthrough",       binary_cols),    # → cols 24:28
     ],
     remainder="drop"
 )
 
-def preprocess_to_dataframe(preprocessor, X):
+# --- Étape 2 : scaling des 7 colonnes météo continues par indice --- Ici slice(11, 18) fonctionne car l'input est le ndarray sorti de l'étape 1
+weather_scaler = ColumnTransformer(
+    transformers=[
+        ("weather_scale", weather_continuous_scaler, slice(11, 18)),
+    ],
+    remainder="passthrough"  # toutes les autres colonnes passent telles quelles
+)
+
+# --- Pipeline final ---
+preprocessor = Pipeline([
+    ("extraction", feature_extractor),
+    ("scaling",    weather_scaler),
+])
+
+# ============================================================
+# PASSAGE EN DATAFRAME
+# ============================================================
+# --- Transformers sklearn pour nos fonctions custom ---
+
+def preprocess_to_dataframe(preprocessor, X, fit=True):
     """
     Applique le preprocessing sklearn et renvoie un DataFrame
     avec les noms de colonnes reconstruits.
+
+    fit=True  → fit_transform (X_train)
+    fit=False → transform uniquement (X_val, X_test)
     """
     # 1. Transformation
-    X_preprocessed = preprocessor.fit_transform(X)
+    X_preprocessed = (
+        preprocessor.fit_transform(X) if fit else preprocessor.transform(X)  # ✅ plus de .loc ici
+    )
+
     # 2. Reconstruction des noms de colonnes
+    # remainder='passthrough' place les colonnes scalées EN PREMIER, puis les passthrough dans l'ordre d'origine.
+    # Ordre brut sorti du pipeline : météo continues | temporelles | météo binaires | binaires
     time_feature_names = [
         "jour_semaine", "jour_mois", "jour_annee", "semaine_annee",
         "mois", "trimestre", "annee",
         "is_debut_mois", "is_fin_mois",
-        "mois_sin", "mois_cos"
+        "mois_sin", "mois_cos",
     ]
     weather_feature_names = [
-        "RR", "TN", "TX", "TM", "FFM",
-        "amplitude", "log_RR",
+        "RR", "TN", "TX", "TM", "FFM", "amplitude", "log_RR",
         "is_rain", "is_wind", "is_cold", "is_hot",
-        "meteo_score", "meteo_degradee"
+        "meteo_score", "meteo_degradee",
     ]
-    binary_cols = ["IS_WEEKEND", "IS_FERIE", "IS_VACANCES", "IS_PONT"]
-    final_columns = (
-        time_feature_names +
-        weather_feature_names +
-        binary_cols
+    binary_feature_names = ["IS_WEEKEND", "IS_FERIE", "IS_VACANCES", "IS_PONT"]
+
+    raw_columns = (
+        weather_feature_names[:7]   # scalées → placées en tête par remainder='passthrough'
+        + time_feature_names
+        + weather_feature_names[7:]
+        + binary_feature_names
     )
-    # 3. Conversion en DataFrame
-    return pd.DataFrame(X_preprocessed, columns=final_columns)
+
+    # 3. Conversion en DataFrame puis réordonnancement
+    final_columns = time_feature_names + weather_feature_names + binary_feature_names
+
+    return (
+        pd.DataFrame(X_preprocessed, columns=raw_columns, index=X.index)
+        .loc[:, final_columns]
+    )
