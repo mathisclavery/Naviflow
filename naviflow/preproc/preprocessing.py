@@ -86,7 +86,7 @@ def transform_time_features(X: pd.DataFrame) -> np.ndarray:
 # ──────────────────────────────────────────────────────────────
 # Seuils (ajustables)
 SEUIL_PLUIE  = 1.0   # mm/j  — pluie significative
-SEUIL_VENT   = 40.0  # km/h  — vent fort
+SEUIL_VENT   = 12  # m/s     — vent fort
 SEUIL_FROID  = 5.0   # °C    — froid ressenti
 SEUIL_CHAUD  = 28.0  # °C    — chaleur significative
 
