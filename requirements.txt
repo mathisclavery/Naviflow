@@ -6,4 +6,12 @@ tensorflow
 matplotlib
 seaborn
 holidays
-vacances-scolaires-france
+
+
+######
+#Clem
+
+plotly
+statsmodels
+pmdarima
+tensorflow
