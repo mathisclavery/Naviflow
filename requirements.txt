@@ -1,3 +1,9 @@
 pandas>=2.0
+numpy
+scikit-learn
+xgboost
+tensorflow
+matplotlib
+seaborn
 holidays
 vacances-scolaires-france

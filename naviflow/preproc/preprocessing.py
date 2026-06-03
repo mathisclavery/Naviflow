@@ -14,6 +14,7 @@ from sklearn.pipeline import Pipeline
 temporal_cols = ["JOUR"]
 weather_cols  = ["RR", "TN", "TX", "TM", "FFM"]
 binary_cols   = ["IS_WEEKEND", "IS_FERIE", "IS_VACANCES", "IS_PONT"]
+id_cols       = ["ID_LIEU"]
 
 
 # ──────────────────────────────────────────────────────────────
@@ -96,16 +97,16 @@ def transform_weather_features(X: pd.DataFrame) -> np.ndarray:
     Features brutes conservées (après imputation médiane) :
       RR, TN, TX, TM, FFM
     Features dérivées créées :
-    ┌───────────────────┬───────────────────────────────────────────────┐
+    ┌─────────────────── ┬──────────────────────────────────────────────┐
     │ Feature            │ Définition                                   │
-    ├───────────────────┼───────────────────────────────────────────────┤
+    ├─────────────────── ┼──────────────────────────────────────────────┤
     │ amplitude_thermique│ TX – TN  (confort ressenti dans la journée)  │
     │ is_rain            │ 1 si RR ≥ SEUIL_PLUIE                        │
     │ is_wind            │ 1 si FFM ≥ SEUIL_VENT                        │
     │ is_cold            │ 1 si TM ≤ SEUIL_FROID                        │
     │ is_hot             │ 1 si TM ≥ SEUIL_CHAUD                        │
     │ meteo_degradee     │ 1 si is_rain OU is_wind OU is_cold OU is_hot │
-    └───────────────────┴───────────────────────────────────────────────┘
+    └─────────────────── ┴──────────────────────────────────────────────┘
 
     Note sur le scaling :
     - RobustScaler est appliqué UNIQUEMENT sur les features continues
@@ -175,51 +176,73 @@ weather_transformer = FunctionTransformer(transform_weather_features, validate=F
 # RR, TN, TX, TM, FFM, amplitude, log_RR
 weather_continuous_scaler = RobustScaler()
 
-# --- Étape 1 : extraction de toutes les features sur le DataFrame brut ---
-feature_extractor = ColumnTransformer(
-    transformers=[
+
+def build_preprocessor(lieu=False):
+    """
+    Construit le pipeline de preprocessing.
+
+    Args:
+        lieu: si True, conserve la colonne ID_LIEU (utile pour un modèle
+              global sur toutes les stations). Si False, elle est droppée.
+
+    Returns:
+        Pipeline sklearn
+    """
+    transformers = [
         ("time",        time_transformer,    temporal_cols),  # → cols 0:11
         ("weather_raw", weather_transformer, weather_cols),   # → cols 11:24
         ("binary",      "passthrough",       binary_cols),    # → cols 24:28
-    ],
-    remainder="drop"
-)
+    ]
+    if lieu:
+        transformers.append(("id", "passthrough", id_cols))  # → col 28
 
-# --- Étape 2 : scaling des 7 colonnes météo continues par indice --- Ici slice(11, 18) fonctionne car l'input est le ndarray sorti de l'étape 1
-weather_scaler = ColumnTransformer(
-    transformers=[
-        ("weather_scale", weather_continuous_scaler, slice(11, 18)),
-    ],
-    remainder="passthrough"  # toutes les autres colonnes passent telles quelles
-)
+    feature_extractor = ColumnTransformer(
+        transformers=transformers,
+        remainder="drop"
+    )
 
-# --- Pipeline final ---
-preprocessor = Pipeline([
-    ("extraction", feature_extractor),
-    ("scaling",    weather_scaler),
-])
+    # Scaling des 7 colonnes météo continues par indice
+    weather_scaler = ColumnTransformer(
+        transformers=[
+            ("weather_scale", weather_continuous_scaler, slice(11, 18)),
+        ],
+        remainder="passthrough"
+    )
+
+    return Pipeline([
+        ("extraction", feature_extractor),
+        ("scaling",    weather_scaler),
+    ])
+
+
+# Preprocessor par défaut (sans ID_LIEU), pour rétro-compatibilité
+preprocessor = build_preprocessor(lieu=False)
+
 
 # ============================================================
 # PASSAGE EN DATAFRAME
 # ============================================================
-# --- Transformers sklearn pour nos fonctions custom ---
 
-def preprocess_to_dataframe(preprocessor, X, fit=True):
+def preprocess_to_dataframe(preprocessor, X, fit=True, lieu=False):
     """
     Applique le preprocessing sklearn et renvoie un DataFrame
     avec les noms de colonnes reconstruits.
 
-    fit=True  → fit_transform (X_train)
-    fit=False → transform uniquement (X_val, X_test)
+    Args:
+        preprocessor: pipeline issu de build_preprocessor()
+        X: DataFrame brut
+        fit: True → fit_transform (X_train) | False → transform (X_val, X_test)
+        lieu: doit correspondre au paramètre utilisé dans build_preprocessor().
+              Si True, la colonne ID_LIEU est présente en sortie.
     """
     # 1. Transformation
     X_preprocessed = (
-        preprocessor.fit_transform(X) if fit else preprocessor.transform(X)  # ✅ plus de .loc ici
+        preprocessor.fit_transform(X) if fit else preprocessor.transform(X)
     )
 
     # 2. Reconstruction des noms de colonnes
     # remainder='passthrough' place les colonnes scalées EN PREMIER, puis les passthrough dans l'ordre d'origine.
-    # Ordre brut sorti du pipeline : météo continues | temporelles | météo binaires | binaires
+    # Ordre brut sorti du pipeline : météo continues | temporelles | météo binaires | binaires | (id)
     time_feature_names = [
         "jour_semaine", "jour_mois", "jour_annee", "semaine_annee",
         "mois", "trimestre", "annee",
@@ -232,16 +255,23 @@ def preprocess_to_dataframe(preprocessor, X, fit=True):
         "meteo_score", "meteo_degradee",
     ]
     binary_feature_names = ["IS_WEEKEND", "IS_FERIE", "IS_VACANCES", "IS_PONT"]
+    id_feature_names = ["ID_LIEU"] if lieu else []
 
     raw_columns = (
         weather_feature_names[:7]   # scalées → placées en tête par remainder='passthrough'
         + time_feature_names
         + weather_feature_names[7:]
         + binary_feature_names
+        + id_feature_names
     )
 
     # 3. Conversion en DataFrame puis réordonnancement
-    final_columns = time_feature_names + weather_feature_names + binary_feature_names
+    final_columns = (
+        time_feature_names
+        + weather_feature_names
+        + binary_feature_names
+        + id_feature_names
+    )
 
     return (
         pd.DataFrame(X_preprocessed, columns=raw_columns, index=X.index)
