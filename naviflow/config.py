@@ -74,11 +74,11 @@ POLES_DEFINITION = {
     "POLE_CHATELET": ["chatelet", "chatelet les halles", "les halles"],
     "POLE_LA_DEFENSE": ["defense", "la defense", "la defense grande arche"],
     "POLE_SAINT_LAZARE": ["auber", "haussmann saint lazare", "havr caumartin",
-                          "havre caumartin", "saint lazare"],
+                          "havre caumartin", "saint lazare", "opera", "augustin"],
     "POLE_MONTPARNASSE": ["montparnasse"],
     "POLE_GARE_DE_LYON": ["gare de lyon"],
     "POLE_GARE_DU_NORD": ["gare du nord", "magenta"],
-    "POLE_GARE_DE_LEST": ["gare de l est"],
+    "POLE_GARE_DE_LEST": ["gare de l est", "landon"],
 }
 
 # Base des IDs synthetiques attribues aux poles (negatifs pour ne pas
