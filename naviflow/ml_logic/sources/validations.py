@@ -7,8 +7,8 @@ avec le nombre total de validations.
 
 import pandas as pd
 
-from naviflow.sources import loaders
-from naviflow.sources.stations import merge_stations
+from naviflow.ml_logic.sources import loaders
+from naviflow.ml_logic.sources.stations import merge_stations
 from naviflow.config import (DATA_DIR,
                              EXPECTED_COLS,
                              ID_RENAME_MAP,
