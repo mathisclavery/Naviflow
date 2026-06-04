@@ -104,6 +104,52 @@ START_YEAR = 2015
 END_YEAR = 2026
 ZONE = "C"  # Paris
 
+
+# --------------------------------------------------------------------------- #
+# RNN model constants
+# --------------------------------------------------------------------------- #
+
+########################################
+#CONSTANTS for RNN MODEL? Will depend on the feature engineering
+#TODO: CR: Move relevant variables into config.py - Not sure yet
+
+#########
+#Define nature of each variable
+PAST_COVARIATES = ['RR', 'TN', 'TX', 'TM', 'FFM','month_sin','month_cos']
+FUTURE_COVARIATES = ['IS_WEEKEND', 'IS_FERIE', 'IS_VACANCES', 'IS_PONT']
+TARGET = 'NB_VALD_TOTAL'
+N_TARGETS = 1
+N_FEATURES = 12 #Q-CR: Can we parametrize it directly as a function of the dataframe
+
+#########
+#DATASET SPLIT FOR MODEL
+
+# FOLDS
+# --------------------------------------------------- #
+FOLD_LENGTH = 1*365*3 # 1 measure every day
+                        # three years
+# --------------------------------------------------- #
+# Let's consider FOLDS starting every trimester       #
+# --------------------------------------------------- #
+FOLD_STRIDE = 1*91 # 1 measure every day
+                   # 1 quarter = 91 days
+# --------------------------------------------------- #
+# Let's consider a train-test-split ratio of 2/3      #
+# --------------------------------------------------- #
+TRAIN_TEST_RATIO = 0.66
+
+#Number of past days before predict
+INPUT_LENGTH = 7
+
+#Number of days to predict
+#NB: Assume no incubation/no gap between past and prediction days
+OUTPUT_LENGTH = 1
+
+
+N_TRAIN = 1000 # number_of_sequences_train -
+N_TEST =  333
+
+
 # --------------------------------------------------------------------------- #
 # Clustering
 # --------------------------------------------------------------------------- #
