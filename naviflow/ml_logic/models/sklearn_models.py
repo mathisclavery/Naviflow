@@ -2,59 +2,66 @@
 
 from sklearn.model_selection import train_test_split, RandomizedSearchCV
 from sklearn.metrics import mean_absolute_error, r2_score
+from sklearn.linear_model import LinearRegression
+from sklearn.model_selection import train_test_split, cross_val_score
 from xgboost import XGBRegressor
 import pandas as pd
 
 """Création d'une target décalée pour la prédiction multi-horizon (J+N)."""
 
-def add_target_horizon(df, horizon=7, target='NB_VALD_TOTAL',
-                       group='ID_LIEU', date='JOUR'):
+def run_linear_regression(X, y, test_size=0.2, random_state=67, cv=5):
     """
-    Crée une target décalée de `horizon` jours dans le futur (approche directe).
-
-    Au lieu de prédire l'affluence du jour courant, le modèle apprend à
-    prédire l'affluence dans N jours à partir des features/lags d'aujourd'hui.
-
-    Exemple : pour J+7, la ligne du 1er janvier aura comme target
-    l'affluence réelle du 8 janvier. Le modèle apprend donc
-    "features du 1er janvier -> affluence du 8 janvier".
-
-    La colonne créée s'appelle 'target_jN' (ex: 'target_j7' pour horizon=7).
+    Entraîne une régression linéaire avec cross-validation.
 
     Args:
-        df: DataFrame contenant déjà les lags (issu de add_lags)
-        horizon: nombre de jours à prédire en avance (défaut 7)
-        target: colonne cible
-        group: colonne de regroupement (station)
-        date: colonne de date pour le tri
+        X: features preprocessées (DataFrame issu de preprocess_to_dataframe)
+        y: target (Series NB_VALD_TOTAL)
+        test_size: proportion du test set (défaut 0.2)
+        random_state: seed pour la reproductibilité
+        cv: nombre de folds pour la cross-validation (défaut 5)
 
     Returns:
-        DataFrame avec la colonne target_jN ajoutée et les NaN de fin supprimés
+        dict avec model, mae, r2, mae_cv, mae_cv_std, y_pred, y_test
     """
-    df = df.copy()
-    df[date] = pd.to_datetime(df[date])
-    df = df.sort_values([group, date])
+    X_train, X_test, y_train, y_test = train_test_split(
+        X, y, test_size=test_size, random_state=random_state
+    )
 
-    target_col = f'target_j{horizon}'
-    df[target_col] = df.groupby(group)[target].shift(-horizon)
+    model = LinearRegression()
 
-    df = df.dropna(subset=[target_col])
+    # Cross-validation sur le train set
+    cv_scores = cross_val_score(
+        model, X_train, y_train,
+        cv=cv, scoring='neg_mean_absolute_error'
+    )
+    mae_cv     = -cv_scores.mean()
+    mae_cv_std = cv_scores.std()
 
-    return df
+    # Fit final + évaluation test
+    model.fit(X_train, y_train)
+    y_pred = model.predict(X_test)
 
+    mae = mean_absolute_error(y_test, y_pred)
+    r2  = r2_score(y_test, y_pred)
 
+    print("=" * 50)
+    print("LINEAR REGRESSION")
+    print("=" * 50)
+    print(f"MAE CV ({cv} folds): {mae_cv:.0f} (+/- {mae_cv_std:.0f})")
+    print(f"MAE test          : {mae:.0f}")
+    print(f"R²                : {r2:.3f}")
+    print(f"Erreur relative   : {mae / y_test.mean() * 100:.1f}%")
 
-DEFAULT_PARAM_GRID = {
-    'n_estimators':     [300, 500, 700, 900, 1100, 1300, 1500],
-    'max_depth':        [3, 4, 5, 6, 7, 8],
-    'learning_rate':    [0.01, 0.02, 0.03, 0.05, 0.08, 0.1],
-    'subsample':        [0.6, 0.7, 0.8, 0.9, 1.0],
-    'colsample_bytree': [0.6, 0.7, 0.8, 0.9, 1.0],
-    'min_child_weight': [1, 2, 3, 5, 7],
-    'gamma':            [0, 0.1, 0.3, 0.5],
-    'reg_alpha':        [0, 0.1, 0.5, 1.0],
-    'reg_lambda':       [0.5, 1.0, 1.5, 2.0],
-}
+    return {
+        'model': model,
+        'mae': mae,
+        'r2': r2,
+        'mae_cv': mae_cv,
+        'mae_cv_std': mae_cv_std,
+        'y_pred': y_pred,
+        'y_test': y_test,
+    }
+
 
 
 def run_xgboost(X, y, test_size=0.2, random_state=67, cv=5,

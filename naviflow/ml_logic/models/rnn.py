@@ -7,7 +7,7 @@
 #IMPORTS
 
 #Naviflow imports
-from naviflow.pipeline import load
+from naviflow.ml_logic.data import load
 from naviflow.models.baseline_bis_station import init_baseline_station
 
 
