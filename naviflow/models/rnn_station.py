@@ -75,7 +75,7 @@ def get_folds(
 
 #Q-CR: To train/val/test on the ENTIRE dataset, can we just call fold = entire dataframe
 #NB: The validation set is managed during 'fit_model' with 'validation_split'
-def fold_train_test_split_station(fold:pd.DataFrame,
+def fold_train_test_split(fold:pd.DataFrame,
                      train_test_ratio: float,
                      input_length: int) -> Tuple[pd.DataFrame]:
     """From a fold dataframe, take a train dataframe and test dataframe based on
@@ -105,7 +105,7 @@ def fold_train_test_split_station(fold:pd.DataFrame,
     return (fold_train_station, fold_test_station)
 
 
-def get_Xi_yi(
+def get_Xi_yi_station(
     fold:pd.DataFrame,
     input_length:int,
     output_length:int) -> Tuple[pd.DataFrame]:
@@ -135,14 +135,50 @@ def get_Xi_yi(
     X_past_i['FFM'] = X_past_i['FFM'].fillna(0) #In the orig data there are few values with Nan
     #FUTURE COVARIATES
     X_fut_i = fold.iloc[random_start:random_start+input_length+output_length]
-    X_fut_i.drop(columns=PAST_COVARIATES,inplace=True)
-    X_fut_i.drop(columns=[TARGET],inplace=True) #you don't know future validations, that's what you're predicting
+    X_fut_i = X_fut_i[FUTURE_COVARIATES] #Keep only future covariates
     #X_fut_i.drop(columns=['index'],inplace=True) #TODO: Comment if fails
 
     ############
     #TARGET
     y_i = fold.iloc[random_start+input_length:
                   random_start+input_length+output_length][[TARGET]]
+
+
+    return (X_past_i, X_fut_i, y_i)
+    # $CHALLENGIFY_END
+
+def get_Xi_yi(
+    fold:pd.DataFrame,
+    input_length:int,
+    output_length:int) -> Tuple[pd.DataFrame]:
+
+    """only difference with 'get_Xi_yi' is the management of y that has now N-stations target
+    """
+
+    # $CHALLENGIFY_BEGIN
+    first_possible_start = 0
+    last_possible_start = len(fold) - (input_length + output_length) + 1
+    random_start = np.random.randint(first_possible_start, last_possible_start)
+
+    ############
+    #FEATURES
+    #PAST COVARIATES
+    #NB: We keep the TARGET in X for Times Series
+    X_past_i = fold.iloc[random_start:random_start+input_length]
+    X_past_i.drop(columns=FUTURE_COVARIATES,inplace=True)
+    #X_past_i.drop(columns=['index'],inplace=True) #TODO: Comment if fails
+    X_past_i['FFM'] = X_past_i['FFM'].fillna(0) #In the orig data there are few values with Nan
+    #FUTURE COVARIATES
+    X_fut_i = fold.iloc[random_start:random_start+input_length+output_length]
+    X_fut_i = X_fut_i[FUTURE_COVARIATES] #Keep only future covariates
+    #X_fut_i.drop(columns=['index'],inplace=True) #TODO: Comment if fails
+
+    ############
+    #TARGETs - Now needs to be a vector of N-stations Tickets validations
+    y_i = fold.iloc[random_start+input_length:
+                  random_start+input_length+output_length].drop(columns = PAST_COVARIATES)
+
+    y_i = y_i.drop(columns=FUTURE_COVARIATES)
 
 
     return (X_past_i, X_fut_i, y_i)
@@ -181,7 +217,7 @@ def get_X_y(
 #####################################
 #REAL MODEL DEFINITION + OPTIMIZATION METHODS
 
-def init_model_station(X_past_train, X_fut_train, y_train):
+def init_model(X_past_train, X_fut_train, y_train):
 
 
     # Branch 1 — past features
@@ -232,7 +268,8 @@ def fit_model(model: tf.keras.Model,
     es = EarlyStopping(monitor = "val_loss",
                       patience = 100,
                       mode = "min",
-                      restore_best_weights = True)
+                      restore_best_weights = True,
+                      verbose=verbose)
 
 
     history = model.fit([X_past_train, X_fut_train], y_train,
