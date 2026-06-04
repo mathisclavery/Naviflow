@@ -7,7 +7,18 @@ from sklearn.model_selection import train_test_split, cross_val_score
 from xgboost import XGBRegressor
 import pandas as pd
 
-"""Création d'une target décalée pour la prédiction multi-horizon (J+N)."""
+DEFAULT_PARAM_GRID = {
+    'n_estimators':     [300, 500, 700, 900, 1100, 1300, 1500],
+    'max_depth':        [3, 4, 5, 6, 7, 8],
+    'learning_rate':    [0.01, 0.02, 0.03, 0.05, 0.08, 0.1],
+    'subsample':        [0.6, 0.7, 0.8, 0.9, 1.0],
+    'colsample_bytree': [0.6, 0.7, 0.8, 0.9, 1.0],
+    'min_child_weight': [1, 2, 3, 5, 7],
+    'gamma':            [0, 0.1, 0.3, 0.5],
+    'reg_alpha':        [0, 0.1, 0.5, 1.0],
+    'reg_lambda':       [0.5, 1.0, 1.5, 2.0],
+}
+
 
 def run_linear_regression(X, y, test_size=0.2, random_state=67, cv=5):
     """
