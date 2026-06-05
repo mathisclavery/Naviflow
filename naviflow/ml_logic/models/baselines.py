@@ -1,5 +1,11 @@
 from sklearn.model_selection import train_test_split
 from sklearn.metrics import mean_absolute_error, r2_score
+from keras.layers import Lambda, Input
+from keras import layers
+from keras.models import Model
+
+#Import CONSTANTS
+from naviflow.config import *
 
 
 def run_baseline_mean(X, y, test_size=0.2, random_state=67):
@@ -91,25 +97,23 @@ def run_baseline_lag(X, y, test_size=0.2, random_state=67, lag_col='lag_7'):
 
 
 
-
-
-
-
-
-
-
 # #####################################
-# from keras.layers import Lambda
 
 # #Baseline is cross validated with folds in the rnn_station.py
-# def init_baseline_station():
+def init_baseline_rnn(X_past_train):
 
-#     # $CHALLENGIFY_BEGIN
-#     model = models.Sequential()
-#     model.add(layers.Lambda(lambda x: x[:,-1,1,None]))
+    # Branch 1 — processes past features with LSTM
+    inp_past = Input(shape=X_past_train.shape[1:])
 
-#     adam = optimizers.Adam(learning_rate=0.02)
-#     model.compile(loss='mse', optimizer=adam, metrics=["mae"])
+    out = layers.Lambda(lambda x: x[:,-7:-6,:NUMBER_STATIONS])(inp_past)
 
-#     return model
-#     # $CHALLENGIFY_END
+    #BUILD OVERALL MODEL
+    model = Model(inputs=inp_past, outputs=out)
+
+       # 2 - Compiler
+    # ======================
+    #adam = optimizers.Adam(learning_rate=0.005)
+    model.compile(loss='mse', optimizer="adam", metrics=["mae"])
+
+
+    return model
