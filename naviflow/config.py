@@ -113,7 +113,7 @@ ZONE = "C"  # Paris
 # RNN model constants
 # --------------------------------------------------------------------------- #
 
-########################################
+######################################################
 #CONSTANTS for RNN MODEL? Will depend on the feature engineering
 #TODO: CR: Move relevant variables into config.py - Not sure yet
 
@@ -125,10 +125,12 @@ TARGET = 'NB_VALD_TOTAL'
 N_TARGETS = 1
 N_FEATURES = 12 #Q-CR: Can we parametrize it directly as a function of the dataframe
 
-#########
+####################################################
 #DATASET SPLIT FOR MODEL
 
+#####
 # FOLDS
+# NB: OPTIONAL FOR CROSS VALIDATION of the RNN model
 # --------------------------------------------------- #
 FOLD_LENGTH = 1*365*3 # 1 measure every day
                         # three years
@@ -137,21 +139,27 @@ FOLD_LENGTH = 1*365*3 # 1 measure every day
 # --------------------------------------------------- #
 FOLD_STRIDE = 1*91 # 1 measure every day
                    # 1 quarter = 91 days
+
+
+######################################################
 # --------------------------------------------------- #
 # Let's consider a train-test-split ratio of 2/3      #
 # --------------------------------------------------- #
 TRAIN_TEST_RATIO = 0.66
 
+#######################################################
+#X, y shapes variables
+
 #Number of past days before predict
 INPUT_LENGTH = 7
-
-#Number of days to predict
+#Number of days to predict/horizon
 #NB: Assume no incubation/no gap between past and prediction days
 OUTPUT_LENGTH = 1
 
-
-N_TRAIN = 1000 # number_of_sequences_train -
-N_TEST =  333
+########################################################
+#Number of samples to take for training
+N_TRAIN = 5000 # number_of_sequences_train = Samples
+N_TEST =  int(N_TRAIN*(1-TRAIN_TEST_RATIO)) #To keep same proportion of samples to take in the TEST set
 
 
 # --------------------------------------------------------------------------- #
