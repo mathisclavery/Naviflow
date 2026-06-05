@@ -68,6 +68,10 @@ STATION_OVERRIDES = {
     "juvisy": "merge_max",
 }
 
+ID_TO_DROP = [65227, 72641, 72787, 62667,  62939,  63244,  60856, 486998,  60776,  60387, 486996, 486999,
+ 486959,  60892,  62977, 486992,  60985,  60450,  60915, 64566,  73602, 480927, 480950, 480952,  64246,  64382,  73731,  64622,
+  64049,  64589, 480951, 68293, 68311, 68505, 68582, ]
+
 # Poles d'echange : regroupement de stations co-localisees
 # Matching par cle de libelle EXACTE. Chaque pole somme ses stations.
 POLES_DEFINITION = {
@@ -115,7 +119,7 @@ ZONE = "C"  # Paris
 
 #########
 #Define nature of each variable
-PAST_COVARIATES = ['RR', 'TN', 'TX', 'TM', 'FFM','month_sin','month_cos']
+PAST_COVARIATES = ['RR', 'TN', 'TX', 'TM', 'FFM','mois_sin','mois_cos']
 FUTURE_COVARIATES = ['IS_WEEKEND', 'IS_FERIE', 'IS_VACANCES', 'IS_PONT']
 TARGET = 'NB_VALD_TOTAL'
 N_TARGETS = 1

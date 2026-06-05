@@ -1,9 +1,9 @@
-from naviflow.sources.validations import load_validations
-from naviflow.sources.meteo import load_meteo
-from naviflow.sources.calendrier import load_calendrier
+from naviflow.ml_logic.sources.validations import load_validations
+from naviflow.ml_logic.sources.meteo import load_meteo
+from naviflow.ml_logic.sources.calendrier import load_calendrier
 
 
-def load():
+def get_data():
     """Charge et joint toutes les données du projet.
 
     Combine les validations journalières par station avec les données météo
