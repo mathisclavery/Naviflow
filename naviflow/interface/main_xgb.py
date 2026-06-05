@@ -7,7 +7,7 @@ from naviflow.ml_logic.data import get_data
 from naviflow.ml_logic.feature_engineering import build_features
 from naviflow.ml_logic.preprocess_xgb import prepare_xgb
 from naviflow.ml_logic.models.sklearn_models import run_xgboost
-from naviflow import registry
+from naviflow import registry_xgb
 from naviflow.utils import display as d
 from naviflow.config import TRAIN_FROM as DEFAULT_TRAIN_FROM
 
@@ -39,7 +39,7 @@ def train_all(grain="station", n_clusters=4, lags=(1, 7, 30), horizon=7,
     for gid in pbar:
         pbar.set_postfix_str(f"{grain} {gid}")
 
-        if not force and save and registry.model_path(gid, grain, horizon, actual_train_from).exists():
+        if not force and save and registry_xgb.model_path(gid, grain, horizon, actual_train_from).exists():
             skipped += 1
             continue
 
@@ -56,7 +56,7 @@ def train_all(grain="station", n_clusters=4, lags=(1, 7, 30), horizon=7,
                         "mae_pct": round(mae_pct, 1), "n_samples": len(Y_np)}
 
         if save:
-            registry.save_model(res["model"], gid, grain=grain, horizon=horizon,
+            registry_xgb.save_model(res["model"], gid, grain=grain, horizon=horizon,
                                 train_from=actual_train_from)
 
         del df_group, X_np, Y_np, dates_np, res
@@ -65,10 +65,10 @@ def train_all(grain="station", n_clusters=4, lags=(1, 7, 30), horizon=7,
     if skipped:
         d.info(f"{skipped} modeles deja existants — ignores (FORCE=1 pour reentrainer)")
     if save and results:
-        path = registry.save_results(results, grain=grain, horizon=horizon,
+        path = registry_xgb.save_results(results, grain=grain, horizon=horizon,
                                      train_from=actual_train_from)
         d.success(f"Metriques : {path}")
-        d.success(f"{len(results)} modeles dans : {registry.run_dir(grain, horizon, actual_train_from)}")
+        d.success(f"{len(results)} modeles dans : {registry_xgb.run_dir(grain, horizon, actual_train_from)}")
 
     d.done(f"Pipeline terminee ({len(results)} entraines, {skipped} ignores)")
     return results

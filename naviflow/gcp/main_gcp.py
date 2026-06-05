@@ -19,7 +19,7 @@ from naviflow.ml_logic.feature_engineering import build_features
 from naviflow.ml_logic.preprocess_xgb import prepare_xgb
 from naviflow.ml_logic.models.sklearn_models import run_xgboost
 from naviflow.ml_logic.models.baselines import run_baseline_mean, run_baseline_lag
-from naviflow import registry
+from naviflow import registry_xgb
 
 
 # ------------------------------------------------------------------ #
@@ -108,7 +108,7 @@ def train(grain="station", lags=(1, 7, 30), horizon=1, n_iter=10):
         print(f"→ [{i+1}/{len(groups)}] Entraînement {grain} {group_id} ({len(X)} lignes)...")
         result = run_xgboost(X, y, n_iter=n_iter)
 
-        registry.save_model(result["model"], group_id=group_id, grain=grain)
+        registry_xgb.save_model(result["model"], group_id=group_id, grain=grain)
 
         all_results[group_id] = {
             "mae":         result["mae"],
@@ -117,7 +117,7 @@ def train(grain="station", lags=(1, 7, 30), horizon=1, n_iter=10):
             "best_params": str(result["best_params"]),
         }
 
-    registry.save_results(all_results, grain=grain)
+    registry_xgb.save_results(all_results, grain=grain)
     print(f"\n✓ Entraînement terminé — {len(all_results)} modèles sauvegardés.")
     return all_results
 
@@ -128,7 +128,7 @@ def train(grain="station", lags=(1, 7, 30), horizon=1, n_iter=10):
 def evaluate():
     """Affiche un résumé des métriques sauvegardées dans results_xgb.csv."""
     import pandas as pd
-    from naviflow.registry import RESULTS_CSV
+    from naviflow.registry_xgb import RESULTS_CSV
 
     if not RESULTS_CSV.exists():
         print("✗ Aucun résultat trouvé. Lance d'abord : make train")
@@ -166,7 +166,7 @@ def pred(group_id=None, grain="station", lags=(1, 7, 30), horizon=1):
 
     df_group = df[df[group_col] == group_id]
     X, y     = prepare_xgb(df_group, lags=lags, horizon=horizon)
-    model    = registry.load_model(group_id=group_id, grain=grain)
+    model    = registry_xgb.load_model(group_id=group_id, grain=grain)
     y_pred   = model.predict(X)
 
     from sklearn.metrics import mean_absolute_error, r2_score
@@ -213,4 +213,3 @@ if __name__ == "__main__":
         sys.exit(1)
 
     COMMANDS[sys.argv[1]]()
-
