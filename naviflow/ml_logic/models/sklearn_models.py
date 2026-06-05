@@ -123,7 +123,7 @@ def run_xgboost(X, y, test_size=0.2, random_state=67, cv=5,
         scoring='neg_mean_absolute_error',
         random_state=42,
         n_jobs=-1,
-        verbose=1,
+        verbose=0,
     )
 
     # L'eval_set permet l'early stopping pendant le search
@@ -136,15 +136,15 @@ def run_xgboost(X, y, test_size=0.2, random_state=67, cv=5,
     r2     = r2_score(y_test, y_pred)
     mae_cv = -search.best_score_
 
-    print("=" * 50)
-    print("XGBOOST")
-    print("=" * 50)
-    print(f"Meilleurs params : {search.best_params_}")
-    print(f"Best iteration   : {getattr(model, 'best_iteration', 'n/a')}")
-    print(f"MAE CV           : {mae_cv:.0f}")
-    print(f"MAE test         : {mae:.0f}")
-    print(f"R2               : {r2:.3f}")
-    print(f"Erreur relative  : {mae / y_test.mean() * 100:.1f}%")
+    # print("=" * 50)
+    # print("XGBOOST")
+    # print("=" * 50)
+    # print(f"Meilleurs params : {search.best_params_}")
+    # print(f"Best iteration   : {getattr(model, 'best_iteration', 'n/a')}")
+    # print(f"MAE CV           : {mae_cv:.0f}")
+    # print(f"MAE test         : {mae:.0f}")
+    # print(f"R2               : {r2:.3f}")
+    # print(f"Erreur relative  : {mae / y_test.mean() * 100:.1f}%")
 
     return {
         'model': model,
