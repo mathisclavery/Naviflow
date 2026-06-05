@@ -122,8 +122,8 @@ ZONE = "C"  # Paris
 
 #########
 #Define nature of each variable
-PAST_COVARIATES = ['RR', 'TN', 'TX', 'TM', 'FFM','mois_sin','mois_cos']
-FUTURE_COVARIATES = ['IS_WEEKEND', 'IS_FERIE', 'IS_VACANCES', 'IS_PONT']
+PAST_COVARIATES = ['_RR', '_TN', '_TX', '_TM', '_FFM','_month_sin','_month_cos']
+FUTURE_COVARIATES = ['_IS_WEEKEND', '_IS_FERIE', '_IS_VACANCES', '_IS_PONT']
 TARGET = 'NB_VALD_TOTAL'
 N_TARGETS = 1
 N_FEATURES = 12 #Q-CR: Can we parametrize it directly as a function of the dataframe
@@ -150,11 +150,15 @@ FOLD_STRIDE = 1*91 # 1 measure every day
 # --------------------------------------------------- #
 TRAIN_TEST_RATIO = 0.66
 
+
+#######################################################
+NUMBER_STATIONS = 100
+
 #######################################################
 #X, y shapes variables
 
 #Number of past days before predict
-INPUT_LENGTH = 7
+INPUT_LENGTH = 140
 #Number of days to predict/horizon
 #NB: Assume no incubation/no gap between past and prediction days
 OUTPUT_LENGTH = 1
