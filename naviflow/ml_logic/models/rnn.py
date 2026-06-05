@@ -7,7 +7,7 @@
 #IMPORTS
 
 #Naviflow imports
-from naviflow.ml_logic.data import load
+from naviflow.ml_logic.data import get_data
 # from naviflow.models.baseline_bis_station import init_baseline_station
 
 
@@ -96,11 +96,15 @@ def fold_train_test_split(fold:pd.DataFrame,
     # ======================
     last_train_idx = round(train_test_ratio * len(fold))
     fold_train_station = fold.iloc[0:last_train_idx, :]
+    fold_train_station = fold_train_station.add_prefix('_') #To make the dataframe compatible with GCP
+
 
     # TEST SET
     # ======================
     first_test_idx = last_train_idx - input_length
     fold_test_station = fold.iloc[first_test_idx:, :]
+    fold_test_station = fold_test_station.add_prefix('_') #To make the dataframe compatible with GCP
+
 
     return (fold_train_station, fold_test_station)
 
@@ -167,7 +171,7 @@ def get_Xi_yi(
     X_past_i = fold.iloc[random_start:random_start+input_length]
     X_past_i.drop(columns=FUTURE_COVARIATES,inplace=True)
     #X_past_i.drop(columns=['index'],inplace=True) #TODO: Comment if fails
-    X_past_i['FFM'] = X_past_i['FFM'].fillna(0) #In the orig data there are few values with Nan
+    X_past_i['_FFM'] = X_past_i['_FFM'].fillna(0) #In the orig data there are few values with Nan
     #FUTURE COVARIATES
     X_fut_i = fold.iloc[random_start:random_start+input_length+output_length]
     X_fut_i = X_fut_i[FUTURE_COVARIATES] #Keep only future covariates
@@ -228,8 +232,8 @@ def init_model(X_past_train, X_fut_train, y_train):
     inp_past = Input(shape=X_past_train.shape[1:])
     x1 = norm_past(inp_past)
     x1 = layers.LSTM(64,activation='tanh',
-                    return_sequences = False,
-                    kernel_regularizer=L1L2(l1=0.05, l2=0.05))(x1)
+                    return_sequences = False)(x1)
+                    #kernel_regularizer=L1L2(l1=0.05, l2=0.05))(x1) #Regularization disabled for 1st version
 
 
     # Branch 2 — future covariates
@@ -240,23 +244,42 @@ def init_model(X_past_train, X_fut_train, y_train):
     inp_fut = Input(shape=X_fut_train.shape[1:])
     x2 = norm_fut(inp_fut)
     x2 = layers.LSTM(32,activation='tanh',
-                    return_sequences = False,
-                    kernel_regularizer=L1L2(l1=0.05, l2=0.05))(x2)
+                    return_sequences = False)(x2)
+                    #kernel_regularizer=L1L2(l1=0.05, l2=0.05))(x2) #Regularization disabled for 1st version
 
     # Merge and predict
     merged = layers.concatenate([x1, x2])
-    out = layers.Dense(32, activation="relu")(merged)
-    output_length = y_train.shape[1]
-    out = layers.Dense(1, activation="relu")(out) # 1 station + only 1 day preduction future / relu because we cannot have negative #validations
+    x = layers.Dense(128, activation="relu")(merged) #Adding a layer to be less brutal
+    x = layers.Dense(32, activation="relu")(x)
 
+    #OUTPUT LAYERS SHAPE
+    #Important: A single prediction vector shape
+        #Ex: If we want to have 7 days of observations in past + predict 1 day in future for 100 stations
+        # (for a single observation Xi_past shape (7,107) and Xi_fut shape (8,4))
+        # we need an output shape yi shape (1,100) --> y shape (N_obs,1,100)
+    #Here we do not have anymore a basic scalar 'output_length' because several targets _ potentially several days
+    n_days = y_train.shape[1]   # 1 ou 7 ...
+    n_stations = y_train.shape[2]  # 100 ou 740 ...
+
+
+
+    #OUTPUT LAYERS in 2 steps
+    #Tim: Prefer 'linear' to 'relu' even if physically we cannot have negative NB_VALIDATION
+    out = layers.Dense(n_days * n_stations, activation="linear")(x) #Actual prediction layer needs to be 1D
+    out = layers.Reshape(target_shape=(n_days, n_stations),)(out) #But we want to as an output of the yi shape (1,100) --> Reshape layer :)
+
+    #BUILD OVERALL MODEL
     model = Model(inputs=[inp_past, inp_fut], outputs=out)
 
        # 2 - Compiler
     # ======================
-    adam = optimizers.Adam(learning_rate=0.005)
-    model.compile(loss='mse', optimizer=adam, metrics=["mae"])
+    #adam = optimizers.Adam(learning_rate=0.005)
+    model.compile(loss='mse', optimizer="adam", metrics=["mae"])
 
     return model
+
+
+
 
 def fit_model(model: tf.keras.Model,
               X_past_train,
