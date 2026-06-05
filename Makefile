@@ -28,6 +28,11 @@ train_xgb:
 	 TRAIN_FROM=$(TRAIN_FROM) FORCE=$(FORCE) \
 		python -m naviflow.interface.main_xgb
 
+
+baseline_xgb:
+	@GRAIN=$(GRAIN) HORIZON=$(HORIZON) TRAIN_FROM=$(TRAIN_FROM) \
+		python -m naviflow.interface.main_baselines
+
 download:
 	python -m naviflow.gcp.main_gcp download
 
