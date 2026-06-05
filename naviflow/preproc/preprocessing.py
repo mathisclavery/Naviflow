@@ -180,7 +180,6 @@ weather_continuous_scaler = RobustScaler()
 def build_preprocessor(lieu=False):
     """
     Construit le pipeline de preprocessing.
-
     Args:
         lieu: si True, conserve la colonne ID_LIEU (utile pour un modèle
               global sur toutes les stations). Si False, elle est droppée.
