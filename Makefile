@@ -20,3 +20,9 @@ FORCE ?= 0
 train_xgb:
 	@GRAIN=$(GRAIN) N_ITER=$(N_ITER) HORIZON=$(HORIZON) FORCE=$(FORCE) \
 		python -m naviflow.interface.main_xgb
+
+download:
+	python -m naviflow.gcp.main_gcp download
+
+baseline:
+	python -m naviflow.gcp.main_gcp baseline
