@@ -98,15 +98,25 @@ def run_baseline_lag(X, y, test_size=0.2, random_state=67, lag_col='lag_7'):
 
 
 # #####################################
+# BASELINE RNN
 
-# prediction of the day = value day-7
-#ex: Predict value of Monday = value of previous monday - naive dumb prediction taking into account week periodicity
-def init_baseline_rnn(X_past_train):
+#STRATEGY 1
+#prediction of 1 day = value day-7
+    #ex: Predict value of Monday = value of previous monday
+    # naive dumb prediction taking into account week periodicity
 
-    # Branch 1 — processes past features with LSTM
-    inp_past = Input(shape=X_past_train.shape[1:])
+#STRATEGY 2
+#prediction of
 
-    out = layers.Lambda(lambda x: x[:,-7:-6,:NUMBER_STATIONS])(inp_past)
+def init_baseline_rnn(X_past, X_fut, y):
+
+    # Branch 1 — Just input of the shape of the Xi
+    inp_past = Input(shape=X_past.shape[1:])
+
+    if y.shape[1]-7 < 0:
+        out = layers.Lambda(lambda x: x[:,-7:y.shape[1]-7,:NUMBER_STATIONS])(inp_past)
+    else:
+        out = layers.Lambda(lambda x: x[:,-7:,:NUMBER_STATIONS])(inp_past)
 
     #BUILD OVERALL MODEL
     model = Model(inputs=inp_past, outputs=out)
