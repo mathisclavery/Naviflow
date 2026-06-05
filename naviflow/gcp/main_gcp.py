@@ -214,10 +214,3 @@ if __name__ == "__main__":
 
     COMMANDS[sys.argv[1]]()
 
-
-
-download:
-	python -m naviflow.interface.main download
-
-baseline:
-	python -m naviflow.interface.main baseline
