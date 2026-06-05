@@ -29,7 +29,7 @@ MODELS_STORE = PROJECT_ROOT / "models_store"
 RESULTS_CSV = MODELS_STORE / "results_xgb.csv"
 
 
-def _model_path(group_id, grain="station"):
+def model_path(group_id, grain="station"):
     """Chemin du fichier modele pour un groupe donne.
 
     grain : 'station' ou 'cluster' — sert juste a nommer le fichier.
@@ -43,7 +43,7 @@ def save_model(model, group_id, grain="station"):
     Cree models_store/ si absent. Renvoie le chemin ecrit.
     """
     MODELS_STORE.mkdir(parents=True, exist_ok=True)
-    path = _model_path(group_id, grain)
+    path = model_path(group_id, grain)
     model.save_model(path)
     return path
 
@@ -54,7 +54,7 @@ def load_model(group_id, grain="station"):
     Ne charge QUE le modele demande (utile pour une demo : on charge la seule
     station cliquee, pas les 743).
     """
-    path = _model_path(group_id, grain)
+    path = model_path(group_id, grain)
     if not path.exists():
         raise FileNotFoundError(f"Aucun modele sauvegarde pour {grain} {group_id} : {path}")
     model = XGBRegressor()

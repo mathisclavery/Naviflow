@@ -1,22 +1,22 @@
-# -------------------------
-# NAVIFLOW — MLOps Makefile
-# -------------------------
+# ============================================================
+#  Entrainement XGBoost
+# ============================================================
+# Parametres (surchargeables en ligne de commande) :
+#   GRAIN    : station (defaut) ou cluster
+#   N_ITER   : iterations du RandomizedSearch (defaut 50)
+#   HORIZON  : horizon de prediction J+N (vide = jour courant)
+#
+# Exemples :
+#   make train_xgb                          # par station, 50 iters
+#   make train_xgb GRAIN=cluster            # par cluster
+#   make train_xgb GRAIN=station N_ITER=80  # par station, recherche plus large
+#   make train_xgb GRAIN=cluster HORIZON=7  # par cluster, prediction J+7
 
-preprocess:
-    python -m naviflow.interface.main preprocess
+GRAIN   ?= cluster
+N_ITER  ?= 50
+HORIZON ?=
+FORCE ?= 0
 
-train:
-    python -m naviflow.interface.main train
-
-evaluate:
-    python -m naviflow.interface.main evaluate
-
-predict:
-    python -m naviflow.interface.main pred
-
-upload_raw:
-    python -m naviflow.gcp.upload_raw_data
-
-api:
-    uvicorn api.main:app --host 0.0.0.0 --port 8000
-
+train_xgb:
+	@GRAIN=$(GRAIN) N_ITER=$(N_ITER) HORIZON=$(HORIZON) FORCE=$(FORCE) \
+		python -m naviflow.interface.main_xgb
