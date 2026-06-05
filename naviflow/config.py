@@ -125,7 +125,8 @@ N_FEATURES = 12 #Q-CR: Can we parametrize it directly as a function of the dataf
 #DATASET SPLIT FOR MODEL
 
 #####
-# FOLDS - OPTIONAL FOR CROSS VALIDATION of the RNN model
+# FOLDS
+# NB: OPTIONAL FOR CROSS VALIDATION of the RNN model
 # --------------------------------------------------- #
 FOLD_LENGTH = 1*365*3 # 1 measure every day
                         # three years

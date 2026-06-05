@@ -262,6 +262,7 @@ def fit_model(model: tf.keras.Model,
               X_past_train,
               X_fut_train,
               y_train,
+              epochs,
               verbose=1) -> Tuple[tf.keras.Model, dict]:
 
     # $CHALLENGIFY_BEGIN
@@ -276,7 +277,7 @@ def fit_model(model: tf.keras.Model,
                         validation_split = 0.2, # MISTAKE: Do not call TEST data = Dataleakage([X_past_test_station, X_fut_test_station], y_test_station),
                         shuffle = False,
                         batch_size = 32,
-                        epochs = 1000,
+                        epochs = epochs,
                         callbacks = [es],
                         verbose = verbose)
 
