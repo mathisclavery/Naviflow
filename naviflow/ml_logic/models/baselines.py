@@ -99,7 +99,8 @@ def run_baseline_lag(X, y, test_size=0.2, random_state=67, lag_col='lag_7'):
 
 # #####################################
 
-# #Baseline is cross validated with folds in the rnn_station.py
+# prediction of the day = value day-7
+#ex: Predict value of Monday = value of previous monday - naive dumb prediction taking into account week periodicity
 def init_baseline_rnn(X_past_train):
 
     # Branch 1 — processes past features with LSTM
