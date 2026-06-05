@@ -60,6 +60,9 @@ SENTINELLES = [-1, 0, 999999]
 # Seuil qui determine si les deux ID se chevauchent ou se succèdent dans le temps
 THRESHOLD_DAYS = 7
 
+#Date à partir de laquelle on prend les données
+TRAIN_FROM = "2015-01-01"
+
 # Ratio qui determine si les deux ID qui se chevauchent sont complémentaires ou doublons.
 RATIO_DOUBLON = 0.65
 
