@@ -41,61 +41,29 @@ def train_all(grain="station", n_clusters=4, lags=(1, 7, 30), horizon=None,
     -------
     dict {group_id: metrics} (metriques par groupe, sans les modeles).
     """
-    # 1. Donnees + features (UNE seule fois, sur tout le dataset)
-    with_cluster = (grain == "cluster")
-    df = get_data()
-    df = build_features(df, with_cluster=with_cluster, n_clusters=n_clusters)
+    Upload les données brutes vers GCS.
+    """
+    import naviflow.gcp.upload_raw_data as upload_raw_data
+    upload_raw_data.upload_folder(
+        upload_raw_data.LOCAL_FOLDER,
+        upload_raw_data.BUCKET_FOLDER
+    )
 
-    # 2. Colonne qui definit les groupes
-    group_col = "ID_LIEU" if grain == "station" else "cluster"
-    group_ids = sorted(g for g in df[group_col].dropna().unique())
-
-    if verbose:
-        print(f"Grain={grain} | {len(group_ids)} groupes a entrainer\n")
-
-    results = {}
-
-    # 3. Boucle sur les groupes
-    for i, gid in enumerate(group_ids, 1):
-        df_group = df[df[group_col] == gid]
-
-        # Garde-fou : un groupe trop court ne peut pas produire de lags exploitables
-        if len(df_group) <= max(lags) + 1:
-            if verbose:
-                print(f"[{i}/{len(group_ids)}] {grain} {gid} ignore (trop peu de donnees)")
-            continue
-
-        # Conversion numpy au dernier moment, sur un petit morceau
-        X_np, y_np, feature_names = prepare_xgb(
-            df_group, lags=lags, horizon=horizon, as_numpy=True
-        )
-
-        res = run_xgboost(X_np, y_np, n_iter=n_iter)
-
-        # On ne garde que les metriques (pas y_pred/y_test, lourds) dans le dict
-        results[gid] = {"mae": res["mae"], "r2": res["r2"], "mae_cv": res["mae_cv"],
-                        "n_samples": len(y_np)}
-
-        if save:
-            registry.save_model(res["model"], gid, grain=grain)
-
-        if verbose:
-            print(f"[{i}/{len(group_ids)}] {grain} {gid} — MAE={res['mae']:.0f} "
-                  f"R2={res['r2']:.3f} (n={len(y_np)})")
-
-        # Liberation memoire avant l'iteration suivante
-        del df_group, X_np, y_np, res
-        gc.collect()
-
-    # 4. Recap des metriques dans un CSV unique
-    if save and results:
-        registry.save_results(results, grain=grain)
-        if verbose:
-            print(f"\nMetriques sauvegardees : {registry.RESULTS_CSV}")
-
-    return results
+run_upload_raw:
+    python -m naviflow.interface.main upload_raw
 
 
-if __name__ == "__main__":
-    # Par defaut : un modele par station, prediction du jour courant
-    train_all(grain="station")
+def preprocess():
+    ...
+
+def train():
+    ...
+
+def evaluate():
+    ...
+
+def pred():
+    ...
+
+def upload_raw():
+    ...

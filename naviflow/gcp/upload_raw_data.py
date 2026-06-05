@@ -31,7 +31,6 @@ def get_existing_blobs():
     """
     Récupère la liste des fichiers déjà présents dans le bucket.
     Permet de reprendre un upload interrompu sans re-uploader les fichiers déjà envoyés.
-
     Returns:
         set: ensemble des chemins de fichiers déjà présents dans le bucket
     """
@@ -42,11 +41,9 @@ def get_existing_blobs():
 def upload_file(local_path, blob_path):
     """
     Upload un fichier local vers le bucket avec gestion des erreurs et retry.
-
     Args:
         local_path (str): chemin du fichier local
         blob_path  (str): chemin cible dans le bucket
-
     Returns:
         bool: True si l'upload a réussi, False sinon
     """
@@ -60,7 +57,7 @@ def upload_file(local_path, blob_path):
         except Exception as e:
             print(f"  ⚠️  Tentative {attempt}/{MAX_RETRIES} échouée : {e}")
             time.sleep(5)  # Pause avant de réessayer
-
+            
     # Toutes les tentatives ont échoué
     print(f"  ❌ Échec définitif : {blob_path}")
     return False
@@ -70,7 +67,6 @@ def upload_folder(local_folder, bucket_folder):
     """
     Upload récursif d'un dossier local vers le bucket GCS.
     Les fichiers déjà présents dans le bucket sont ignorés.
-
     Args:
         local_folder  (str): chemin du dossier local à uploader
         bucket_folder (str): dossier cible dans le bucket
