@@ -1,9 +1,14 @@
+import os
+
+import pandas as pd
+
 from naviflow.ml_logic.sources.validations import load_validations
 from naviflow.ml_logic.sources.meteo import load_meteo
 from naviflow.ml_logic.sources.calendrier import load_calendrier
+from naviflow.config import TRAIN_FROM as DEFAULT_TRAIN_FROM
 
 
-def get_data():
+def get_data(train_from=None):
     """Charge et joint toutes les données du projet.
 
     Combine les validations journalières par station avec les données météo
@@ -16,6 +21,9 @@ def get_data():
         Une ligne par (jour, station). La météo est dupliquée sur toutes les
         stations d'un même jour (météo unique par jour pour toute l'Île-de-France).
     """
+    if train_from is None:
+        train_from = os.getenv("TRAIN_FROM", DEFAULT_TRAIN_FROM)
+
     df_valid = load_validations()
     df_meteo = load_meteo()
     df_calendrier = load_calendrier()
@@ -23,5 +31,8 @@ def get_data():
     df = (df_valid
           .merge(df_meteo, on="JOUR", how="left")
           .merge(df_calendrier, on="JOUR", how="left"))
+
+    df["JOUR"] = pd.to_datetime(df["JOUR"])
+    df = df[df["JOUR"] >= pd.to_datetime(train_from)].reset_index(drop=True)
 
     return df
