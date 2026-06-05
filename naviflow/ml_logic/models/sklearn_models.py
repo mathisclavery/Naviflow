@@ -1,11 +1,12 @@
-"""XGBoost avec RandomizedSearchCV pour optimisation des hyperparamètres."""
+"""XGBoost multi-sortie avec RandomizedSearchCV pour optimisation des hyperparamètres."""
 
-from sklearn.model_selection import train_test_split, RandomizedSearchCV
+from sklearn.model_selection import train_test_split, RandomizedSearchCV, TimeSeriesSplit
 from sklearn.metrics import mean_absolute_error, r2_score
 from sklearn.linear_model import LinearRegression
 from sklearn.model_selection import train_test_split, cross_val_score
 from xgboost import XGBRegressor
 import pandas as pd
+import numpy as np
 
 # Grille élargie + régularisation fine
 DEFAULT_PARAM_GRID = {
@@ -76,81 +77,104 @@ def run_linear_regression(X, y, test_size=0.2, random_state=67, cv=5):
     }
 
 
-def run_xgboost(X, y, test_size=0.2, random_state=67, cv=5,
-                n_iter=60, param_grid=None, use_gpu=False):
+def run_xgboost(X, Y, dates, test_size=0.2, random_state=67, cv=3,
+                n_iter=40, param_grid=None, use_gpu=False):
     """
-    Entraîne un XGBoost optimisé avec RandomizedSearchCV.
+    Entraîne un XGBoost multi-sortie optimisé avec RandomizedSearchCV.
+
+    Predit le vecteur [J+1, ..., J+H] en une fois grace a
+    multi_strategy='multi_output_tree'.
 
     Args:
-        X: features preprocessées
-        y: target
+        X: features preprocessées (2D)
+        Y: targets multi-horizon (2D, shape [n, H]) issues de prepare_xgb
         test_size: proportion du test set
         random_state: seed
-        cv: folds de cross-validation
-        n_iter: itérations du RandomizedSearch (défaut 60)
+        cv: folds de cross-validation (defaut 3, multi-output plus lourd)
+        n_iter: itérations du RandomizedSearch (défaut 40)
         param_grid: grille custom. Si None, utilise DEFAULT_PARAM_GRID.
-        use_gpu: si True, device='cuda' (mettre n_jobs interne à 1 si VRAM limitée)
+        use_gpu: si True, device='cuda'
 
     Returns:
-        dict avec model, mae, r2, mae_cv, best_params, y_pred, y_test
+        dict avec model, mae, r2, mae_cv, mae_per_h, r2_per_h, best_params,
+        y_pred, y_test
     """
-    X_train, X_test, y_train, y_test = train_test_split(
-        X, y, test_size=test_size, random_state=random_state
-    )
 
-    # Set de validation interne pour l'early stopping (issu du train)
-    X_tr, X_val, y_tr, y_val = train_test_split(
-        X_train, y_train, test_size=0.15, random_state=random_state
-    )
+    dates = np.asarray(dates, dtype='datetime64[ns]')
+
+    unique_days = np.unique(dates)
+    cutoff = unique_days[int(len(unique_days) * (1 - test_size))]
+
+    train_mask = dates < cutoff
+    test_mask  = ~train_mask
+
+    X = np.asarray(X)
+    Y = np.asarray(Y)
+    train_order = np.argsort(dates[train_mask], kind='stable')
+
+    X_train = X[train_mask][train_order]
+    y_train = Y[train_mask][train_order]
+    X_test  = X[test_mask]
+    y_test  = Y[test_mask]
 
     grid = param_grid if param_grid is not None else DEFAULT_PARAM_GRID
 
     base_kwargs = dict(
-        objective='reg:absoluteerror',   # optimise la MAE directement
-        tree_method='hist',              # rapide
-        early_stopping_rounds=50,
+        objective='reg:squarederror',         # MAE non supporte en multi-output
+        tree_method='hist',                    # rapide
+        multi_strategy='multi_output_tree',    # une structure d'arbre -> vecteur
         eval_metric='mae',
         random_state=random_state,
     )
     if use_gpu:
         base_kwargs['device'] = 'cuda'
 
+    tscv = TimeSeriesSplit(n_splits=cv)
+
     search = RandomizedSearchCV(
         XGBRegressor(**base_kwargs),
         grid,
         n_iter=n_iter,
-        cv=cv,
-        scoring='neg_mean_absolute_error',
+        cv=tscv,
+        scoring='neg_mean_absolute_error',     # moyenne sur les sorties
         random_state=42,
         n_jobs=-1,
         verbose=0,
     )
 
-    # L'eval_set permet l'early stopping pendant le search
-    search.fit(X_tr, y_tr, eval_set=[(X_val, y_val)], verbose=False)
+    search.fit(X_train, y_train)
 
     model  = search.best_estimator_
     y_pred = model.predict(X_test)
 
+    # Metriques globales (moyenne sur tous les horizons)
     mae    = mean_absolute_error(y_test, y_pred)
     r2     = r2_score(y_test, y_pred)
     mae_cv = -search.best_score_
 
+    # Metriques par horizon (colonne par colonne)
+    mae_raw = mean_absolute_error(y_test, y_pred, multioutput='raw_values')
+    r2_raw  = r2_score(y_test, y_pred, multioutput='raw_values')
+    horizons = list(range(1, Y.shape[1] + 1))
+    mae_per_h = {h: float(m) for h, m in zip(horizons, mae_raw)}
+    r2_per_h  = {h: float(r) for h, r in zip(horizons, r2_raw)}
+
     # print("=" * 50)
-    # print("XGBOOST")
+    # print("XGBOOST MULTI-SORTIE")
     # print("=" * 50)
     # print(f"Meilleurs params : {search.best_params_}")
-    # print(f"Best iteration   : {getattr(model, 'best_iteration', 'n/a')}")
     # print(f"MAE CV           : {mae_cv:.0f}")
-    # print(f"MAE test         : {mae:.0f}")
-    # print(f"R2               : {r2:.3f}")
-    # print(f"Erreur relative  : {mae / y_test.mean() * 100:.1f}%")
+    # print(f"MAE test (moy)   : {mae:.0f}")
+    # print(f"R2 (moy)         : {r2:.3f}")
+    # print(f"MAE par horizon  : {mae_per_h}")
 
     return {
         'model': model,
         'mae': mae,
         'r2': r2,
         'mae_cv': mae_cv,
+        'mae_per_h': mae_per_h,
+        'r2_per_h': r2_per_h,
         'best_params': search.best_params_,
         'y_pred': y_pred,
         'y_test': y_test,
