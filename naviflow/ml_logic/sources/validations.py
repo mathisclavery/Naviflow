@@ -13,7 +13,8 @@ from naviflow.config import (DATA_DIR,
                              EXPECTED_COLS,
                              ID_RENAME_MAP,
                              KEEP_COLS,
-                             SENTINELLES)
+                             SENTINELLES,
+                             ID_TO_DROP)
 
 
 def select_columns(df, keep_cols=KEEP_COLS):
@@ -89,6 +90,10 @@ def drop_sentinelles(df, sentinelles=SENTINELLES):
     """
     return df[~df["ID_LIEU"].isin(sentinelles)].reset_index(drop=True)
 
+def drop_stations(df: pd.DataFrame, ID:list = ID_TO_DROP) -> pd.DataFrame:
+    """Retire les stations qui ne nous interessent pas."""
+
+    return df[~df["ID_LIEU"].isin(ID)].reset_index(drop=True)
 
 def normalize_labels(df):
     """[Etape 3] Normalise LIBELLE_ARRET.
@@ -106,6 +111,7 @@ def clean(df):
     """Enchaine les etapes de nettoyage post-agregation.
     """
     df = drop_sentinelles(df)
+    df = drop_stations(df)
     df = normalize_labels(df)
     df = merge_stations(df)
     return df

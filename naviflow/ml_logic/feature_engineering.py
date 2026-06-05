@@ -92,9 +92,6 @@ def add_weather_features(df):
     df["is_wind"] = (df["FFM"] >= SEUIL_VENT).astype(int)
     df["is_cold"] = (df["TM"]  <= SEUIL_FROID).astype(int)
     df["is_hot"]  = (df["TM"]  >= SEUIL_CHAUD).astype(int)
-    df["meteo_degradee"] = (
-        (df["is_rain"] + df["is_wind"] + df["is_cold"] + df["is_hot"]) > 0
-    ).astype(int)
 
     return df
 
