@@ -6,7 +6,7 @@ from tqdm import tqdm
 from naviflow.ml_logic.data import get_data
 from naviflow.ml_logic.feature_engineering import build_features
 from naviflow.ml_logic.models.baselines import run_baseline_weekday
-from naviflow import registry
+from naviflow import registry_xgb
 from naviflow.utils import display as d
 from naviflow.config import TRAIN_FROM as DEFAULT_TRAIN_FROM
 
@@ -49,7 +49,7 @@ def run_all(grain="cluster", n_clusters=4, lags=(1, 7, 30), horizon=7,
         }
 
     if save and results:
-        path = registry.save_results(results, grain=grain, horizon=horizon,
+        path = registry_xgb.save_results(results, grain=grain, horizon=horizon,
                                      train_from=actual_train_from)
         d.success(f"Metriques baseline : {path}")
 
