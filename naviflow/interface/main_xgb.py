@@ -12,12 +12,12 @@ from naviflow.utils import display as d
 from naviflow.config import TRAIN_FROM as DEFAULT_TRAIN_FROM
 
 
-def train_all(grain="station", n_clusters=4, lags=(1, 7, 30), horizon=None,
-              n_iter=50, save=True, force=False):
+def train_all(grain="station", n_clusters=4, lags=(1, 7, 30), horizon=7,
+              n_iter=40, save=True, force=False):
+    """Entraine UN modele multi-sortie par groupe, predisant J+1..J+horizon."""
 
     actual_train_from = os.getenv("TRAIN_FROM", DEFAULT_TRAIN_FROM)
-    htag = "jour courant" if horizon is None else f"J+{horizon}"
-    d.title(f"PIPELINE XGBOOST — grain={grain.upper()} | horizon={htag}")
+    d.title(f"PIPELINE XGBOOST — grain={grain.upper()} | sortie=J+1..J+{horizon}")
 
     d.step("Chargement des donnees (get_data)")
     with_cluster = (grain == "cluster")
@@ -44,21 +44,22 @@ def train_all(grain="station", n_clusters=4, lags=(1, 7, 30), horizon=None,
             continue
 
         df_group = df[df[group_col] == gid]
-        if len(df_group) <= max(lags) + 1:
+        if len(df_group) <= max(lags) + horizon + 1:
             continue
 
-        X_np, y_np, _ = prepare_xgb(df_group, lags=lags, horizon=horizon, as_numpy=True)
-        res = run_xgboost(X_np, y_np, n_iter=n_iter)
+        X_np, Y_np, _, dates_np = prepare_xgb(df_group, lags=lags, horizon=horizon, as_numpy=True)
+        res = run_xgboost(X_np, Y_np, dates_np, n_iter=n_iter)
 
         mae_pct = res["mae"] / res["y_test"].mean() * 100
         results[gid] = {"mae": res["mae"], "r2": res["r2"], "mae_cv": res["mae_cv"],
-                        "mae_pct": round(mae_pct, 1), "n_samples": len(y_np)}
+                        "mae_per_h": res["mae_per_h"], "r2_per_h": res["r2_per_h"],
+                        "mae_pct": round(mae_pct, 1), "n_samples": len(Y_np)}
 
         if save:
             registry.save_model(res["model"], gid, grain=grain, horizon=horizon,
                                 train_from=actual_train_from)
 
-        del df_group, X_np, y_np, res
+        del df_group, X_np, Y_np, dates_np, res
         gc.collect()
 
     if skipped:
@@ -75,9 +76,9 @@ def train_all(grain="station", n_clusters=4, lags=(1, 7, 30), horizon=None,
 
 if __name__ == "__main__":
     grain   = os.getenv("GRAIN", "station")
-    n_iter  = int(os.getenv("N_ITER", "50"))
+    n_iter  = int(os.getenv("N_ITER", "40"))
     horizon = os.getenv("HORIZON")
-    horizon = int(horizon) if horizon else None
+    horizon = int(horizon) if horizon else 7
     force   = os.getenv("FORCE", "0") == "1"
 
     train_all(grain=grain, n_iter=n_iter, horizon=horizon, force=force)
