@@ -115,7 +115,7 @@ ZONE = "C"  # Paris
 
 #########
 #Define nature of each variable
-PAST_COVARIATES = ['RR', 'TN', 'TX', 'TM', 'FFM','month_sin','month_cos']
+PAST_COVARIATES = ['RR', 'TN', 'TX', 'TM', 'FFM','mois_sin','mois_cos']
 FUTURE_COVARIATES = ['IS_WEEKEND', 'IS_FERIE', 'IS_VACANCES', 'IS_PONT']
 TARGET = 'NB_VALD_TOTAL'
 N_TARGETS = 1

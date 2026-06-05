@@ -7,8 +7,8 @@
 #IMPORTS
 
 #Naviflow imports
-from naviflow.pipeline import load
-from naviflow.models.baseline_bis_station import init_baseline_station
+from naviflow.ml_logic.data import load
+# from naviflow.models.baseline_bis_station import init_baseline_station
 
 
 #General imports
@@ -252,60 +252,59 @@ def fit_model(model: tf.keras.Model,
 #####################################
 #CROSS VALIDATE MODEL ON SEVERAL FOLDS - 1 STATION
 
-from keras.callbacks import EarlyStopping
 
-def cross_validate_baseline_and_lstm_station():
-    '''
-    This function cross-validates
-    - the "last seen value" baseline model
-    - the RNN model
-    '''
+# def cross_validate_baseline_and_lstm_station():
+#     '''
+#     This function cross-validates
+#     - the "last seen value" baseline model
+#     - the RNN model
+#     '''
 
-    list_of_mae_baseline_model = []
-    list_of_mae_recurrent_model = []
+#     list_of_mae_baseline_model = []
+#     list_of_mae_recurrent_model = []
 
-    # 0 - Creating folds
-    # =========================================
-    folds = get_folds(df, FOLD_LENGTH, FOLD_STRIDE)
+#     # 0 - Creating folds
+#     # =========================================
+#     folds = get_folds(df, FOLD_LENGTH, FOLD_STRIDE)
 
-    for fold_id, fold in enumerate(folds):
+#     for fold_id, fold in enumerate(folds):
 
-        # 1 - Train/Test split the current fold
-        # =========================================
-        (fold_train, fold_test) = fold_train_test_split(fold, TRAIN_TEST_RATIO, INPUT_LENGTH)
+#         # 1 - Train/Test split the current fold
+#         # =========================================
+#         (fold_train, fold_test) = fold_train_test_split(fold, TRAIN_TEST_RATIO, INPUT_LENGTH)
 
-        X_past_train_station, X_fut_train_station, y_train_station = get_X_y(fold_train_station, N_TRAIN, INPUT_LENGTH, OUTPUT_LENGTH)
-        X_past_test_station, X_fut_test_station, y_test_station = get_X_y(fold_test_station, N_TEST, INPUT_LENGTH, OUTPUT_LENGTH)
+#         X_past_train_station, X_fut_train_station, y_train_station = get_X_y(fold_train_station, N_TRAIN, INPUT_LENGTH, OUTPUT_LENGTH)
+#         X_past_test_station, X_fut_test_station, y_test_station = get_X_y(fold_test_station, N_TEST, INPUT_LENGTH, OUTPUT_LENGTH)
 
-        # 2 - Modelling
-        # =========================================
+#         # 2 - Modelling
+#         # =========================================
 
-        ##### Baseline Model
-        baseline_model = init_baseline_station()
-        mae_baseline = baseline_model.evaluate(X_past_test_station, y_test_station, verbose=0)[1]
-        list_of_mae_baseline_model.append(mae_baseline)
-        print("-"*50)
-        print(f"MAE baseline fold n°{fold_id} = {round(mae_baseline, 2)}")
+#         ##### Baseline Model
+#         baseline_model = init_baseline_station()
+#         mae_baseline = baseline_model.evaluate(X_past_test_station, y_test_station, verbose=0)[1]
+#         list_of_mae_baseline_model.append(mae_baseline)
+#         print("-"*50)
+#         print(f"MAE baseline fold n°{fold_id} = {round(mae_baseline, 2)}")
 
-        ##### LSTM Model
-        model = init_model_station(X_past_train_station, X_fut_train_station, y_train_station)
-        es = EarlyStopping(monitor = "val_mae",
-                           mode = "min",
-                           patience = 2,
-                           restore_best_weights = True)
-        history = model.fit([X_past_train_station, X_fut_train_station], y_train_station,
-                            validation_split = 0.2,
-                            shuffle = False,
-                            batch_size = 32,
-                            epochs = 150, #Reduced number of epochs based on the results on 1 fold above
-                            callbacks = [es],
-                            verbose = 0)
-        res = model.evaluate([X_past_test_station, X_fut_test_station], y_test_station, verbose=0)
-        mae_lstm = res[1]
-        list_of_mae_recurrent_model.append(mae_lstm)
-        print(f"MAE LSTM fold n°{fold_id} = {round(mae_lstm, 2)}")
+#         ##### LSTM Model
+#         model = init_model_station(X_past_train_station, X_fut_train_station, y_train_station)
+#         es = EarlyStopping(monitor = "val_mae",
+#                            mode = "min",
+#                            patience = 2,
+#                            restore_best_weights = True)
+#         history = model.fit([X_past_train_station, X_fut_train_station], y_train_station,
+#                             validation_split = 0.2,
+#                             shuffle = False,
+#                             batch_size = 32,
+#                             epochs = 150, #Reduced number of epochs based on the results on 1 fold above
+#                             callbacks = [es],
+#                             verbose = 0)
+#         res = model.evaluate([X_past_test_station, X_fut_test_station], y_test_station, verbose=0)
+#         mae_lstm = res[1]
+#         list_of_mae_recurrent_model.append(mae_lstm)
+#         print(f"MAE LSTM fold n°{fold_id} = {round(mae_lstm, 2)}")
 
-        ##### Comparison LSTM vs Baseline for the current fold
-        print(f"🏋🏽‍♂️ improvement over baseline: {round((1 - (mae_lstm/mae_baseline))*100,2)} % \n")
+#         ##### Comparison LSTM vs Baseline for the current fold
+#         print(f"🏋🏽‍♂️ improvement over baseline: {round((1 - (mae_lstm/mae_baseline))*100,2)} % \n")
 
-    return list_of_mae_baseline_model, list_of_mae_recurrent_model
+#     return list_of_mae_baseline_model, list_of_mae_recurrent_model
