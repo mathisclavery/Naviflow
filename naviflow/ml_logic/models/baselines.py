@@ -7,6 +7,8 @@ from keras.models import Model
 #Import CONSTANTS
 from naviflow.config import *
 
+import numpy as np
+
 
 import numpy as np
 import pandas as pd
@@ -117,3 +119,25 @@ def init_baseline_rnn(X_past, X_fut, y): #Advice Tim: ask 'X_fut' also as parame
 
 
     return model
+
+
+def compute_score_baseline_rnn(model,X_past, y):
+
+    y_pred = model.predict(X_past)
+
+    mean_error_list_baseline_week = []
+
+    print('y.shape[1]',y.shape[1])
+
+    for day in range(y.shape[1]):
+        mean_error_distrib_baseline_1day = []
+
+        for station_index in range(NUMBER_STATIONS):
+            mean_mae_station = np.abs(y - y_pred)[:,day,station_index].mean()
+            mean_nb_valid_station = np.abs(y)[:,day,station_index].mean()
+            mean_error_station = mean_mae_station/mean_nb_valid_station
+            mean_error_distrib_baseline_1day.append(mean_error_station)
+        mean_error_baseline_1day = np.mean(mean_error_distrib_baseline_1day)
+        mean_error_list_baseline_week.append(round(mean_error_baseline_1day,2))
+
+    return mean_error_list_baseline_week
