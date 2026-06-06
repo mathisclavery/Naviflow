@@ -106,19 +106,24 @@ def run_baseline_lag(X, y, test_size=0.2, random_state=67, lag_col='lag_7'):
     # naive dumb prediction taking into account week periodicity
 
 #STRATEGY 2
-#prediction of
+#prediction of several days of the week (2 to 7 max: M,T,W,T,F,S,S)
 
-def init_baseline_rnn(X_past, X_fut, y):
+def init_baseline_rnn(X_past, X_fut, y): #Advice Tim: ask 'X_fut' also as parameter even if not used here, to keep same structure
 
     # Branch 1 — Just input of the shape of the Xi
     inp_past = Input(shape=X_past.shape[1:])
+    print('X_past.shape[1:]',X_past.shape[1:])
 
-    if y.shape[1]-7 < 0:
+    if y.shape[1]-7 < 0: #ie if #days to predict < 7 days
         out = layers.Lambda(lambda x: x[:,-7:y.shape[1]-7,:NUMBER_STATIONS])(inp_past)
+    #Manage exception where we want to predict exactly 7 days (never more in practice)
     else:
         out = layers.Lambda(lambda x: x[:,-7:,:NUMBER_STATIONS])(inp_past)
 
+    print('out.shape =', out.shape)
+
     #BUILD OVERALL MODEL
+    # Generic definition, but the Baseline is only a Sequential model
     model = Model(inputs=inp_past, outputs=out)
 
        # 2 - Compiler

@@ -155,10 +155,10 @@ NUMBER_STATIONS = 100
 #X, y shapes variables
 
 #Number of past days before predict
-INPUT_LENGTH = 140
+INPUT_LENGTH = 14
 #Number of days to predict/horizon
 #NB: Assume no incubation/no gap between past and prediction days
-OUTPUT_LENGTH = 1
+OUTPUT_LENGTH = 7
 
 ########################################################
 #Number of samples to take for training
