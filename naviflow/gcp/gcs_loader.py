@@ -8,10 +8,14 @@ Télécharge uniquement les fichiers absents en local (reprise possible).
 
 import os
 from pathlib import Path
+
 from google.cloud import storage
 
-PROJECT_ID    = "naviflow-pro"
-BUCKET_NAME   = "naviflow-pro-mldl"
+from naviflow.config import (
+    GCP_PROJECT,
+    BUCKET_NAME
+)
+
 BUCKET_FOLDER = "raw"
 LOCAL_FOLDER  = Path(__file__).resolve().parent.parent.parent / "raw_data"
 
@@ -21,7 +25,7 @@ def download_raw_data():
 
     Ignore les fichiers déjà présents en local.
     """
-    client = storage.Client(project=PROJECT_ID)
+    client = storage.Client(project=GCP_PROJECT)
     blobs  = list(client.list_blobs(BUCKET_NAME, prefix=f"{BUCKET_FOLDER}/"))
 
     print(f"📋 {len(blobs)} fichiers trouvés dans gs://{BUCKET_NAME}/{BUCKET_FOLDER}/\n")

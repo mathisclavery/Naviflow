@@ -17,7 +17,7 @@
 #   make train_xgb TRAIN_FROM=2021-01-01            # post-COVID seulement
 #   make train_xgb FORCE=1                           # ecrase les modeles existants
 
-GRAIN      ?= cluster
+GRAIN      ?= station
 N_ITER     ?= 50
 HORIZON    ?=
 TRAIN_FROM ?= 2015-01-01
@@ -27,7 +27,6 @@ train_xgb:
 	@GRAIN=$(GRAIN) N_ITER=$(N_ITER) HORIZON=$(HORIZON) \
 	 TRAIN_FROM=$(TRAIN_FROM) FORCE=$(FORCE) \
 		python -m naviflow.interface.main_xgb
-
 
 baseline_xgb:
 	@GRAIN=$(GRAIN) HORIZON=$(HORIZON) TRAIN_FROM=$(TRAIN_FROM) \

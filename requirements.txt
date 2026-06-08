@@ -16,3 +16,5 @@ plotly
 statsmodels
 pmdarima
 tensorflow
+
+google-cloud-storage
