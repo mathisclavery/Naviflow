@@ -70,7 +70,8 @@ def add_target_horizon(df, horizon=7, target=TARGET, group="ID_LIEU", date="JOUR
 
 
 def prepare_xgb(df, lags=(1, 7, 30), horizon=7, keep_id=False,
-                onehot_cluster=False, scale=False, as_numpy=False):
+                onehot_cluster=False, scale=False, as_numpy=False,
+                exclude_window=None):
     """Prépare X (2D) et Y (2D : une colonne par horizon J+1 ... J+horizon).
 
     Pensé pour un XGBRegressor multi-sortie (multi_strategy='multi_output_tree')
@@ -106,6 +107,10 @@ def prepare_xgb(df, lags=(1, 7, 30), horizon=7, keep_id=False,
     """
 
     df = df.copy()
+
+    if exclude_window is not None:
+        start, end = pd.Timestamp(exclude_window[0]), pd.Timestamp(exclude_window[1])
+        df = df[(df["JOUR"] < start) | (df["JOUR"] >= end)]
 
     if lags:
         df = add_lags(df, lags=lags)

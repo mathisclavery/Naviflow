@@ -69,6 +69,9 @@ THRESHOLD_DAYS = 7
 #Date à partir de laquelle on prend les données
 TRAIN_FROM = "2015-01-01"
 
+#Dates covid à exclure
+EXCLUDE_WINDOW = ["2020-01-01", "2023-01-01"]
+
 # Ratio qui determine si les deux ID qui se chevauchent sont complémentaires ou doublons.
 RATIO_DOUBLON = 0.65
 

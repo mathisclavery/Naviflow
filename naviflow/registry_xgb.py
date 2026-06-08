@@ -92,12 +92,22 @@ def save_model(model, group_id, grain="station", horizon=None, train_from=None):
 
 
 def load_model(group_id, grain="station", horizon=None, train_from=None):
-    """Recharge un XGBRegressor depuis le dossier du run (un seul modele)."""
-    path = model_path(group_id, grain, horizon, train_from)
-    if not path.exists():
-        raise FileNotFoundError(f"Aucun modele : {path}")
+    """Recharge un XGBRegressor, depuis le local ou GCS selon MODEL_TARGET."""
     model = XGBRegressor()
-    model.load_model(path)
+    if MODEL_TARGET == "gcs":
+        from google.cloud import storage
+
+        storage_client = storage.Client(project=GCP_PROJECT)
+        bucket = storage_client.bucket(BUCKET_NAME)
+        blob = bucket.blob(_blob_name(group_id, grain, horizon, train_from))
+        if not blob.exists():
+            raise FileNotFoundError(f"Aucun modele sur GCS : {blob.name}")
+        model.load_model(bytearray(blob.download_as_bytes()))
+    else:
+        path = model_path(group_id, grain, horizon, train_from)
+        if not path.exists():
+            raise FileNotFoundError(f"Aucun modele : {path}")
+        model.load_model(path)
     return model
 
 
