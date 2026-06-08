@@ -11,12 +11,12 @@ from naviflow.utils import display as d
 from naviflow.config import TRAIN_FROM as DEFAULT_TRAIN_FROM
 
 
-def run_all(grain="cluster", n_clusters=4, lags=(1, 7, 30), horizon=7,
+def run_all(grain="station", n_clusters=4, lags=(1, 7, 30), horizon=7,
             test_size=0.2, save=True):
-    """Calcule la baseline 'meme jour de la semaine derniere' par groupe."""
+    """Baseline 'meme jour semaine derniere' par groupe, CSV propre par horizon."""
 
     actual_train_from = os.getenv("TRAIN_FROM", DEFAULT_TRAIN_FROM)
-    d.title(f"BASELINES — grain={grain.upper()} | sortie=J+1..J+{horizon}")
+    d.title(f"BASELINE — grain={grain.upper()} | sortie=J+1..J+{horizon}")
 
     d.step("Chargement des donnees (get_data)")
     with_cluster = (grain == "cluster")
@@ -39,30 +39,26 @@ def run_all(grain="cluster", n_clusters=4, lags=(1, 7, 30), horizon=7,
         if len(df_group) <= max(lags) + horizon + 1:
             continue
 
-        res = run_baseline_weekday(df_group, horizon=horizon, lags=lags)
-
-        results[gid] = {
-            "mae":       round(res["mae"]),
-            "r2":        round(res["r2"], 3),
-            "mae_per_h": {h: round(m) for h, m in res["mae_per_h"].items()},
-            "n_test":    len(res["y_test"]),
-        }
+        res = run_baseline_weekday(df_group, horizon=horizon, lags=lags,
+                                   test_size=test_size)
+        results[gid] = res["flat"]
 
     if save and results:
         path = registry_xgb.save_results(results, grain=grain, horizon=horizon,
-                                     train_from=actual_train_from)
+                                     train_from=actual_train_from,
+                                     suffix="baseline")
         d.success(f"Metriques baseline : {path}")
 
     if results:
-        mean_mae = np.mean([v["mae"] for v in results.values()])
-        d.info(f"MAE baseline moyen (tous {grain}s) : {mean_mae:.0f}")
+        mean_mae = np.mean([v["mae_j1"] for v in results.values()])
+        d.info(f"MAE J+1 moyen (tous {grain}s) : {mean_mae:.0f}")
 
-    d.done(f"Baselines terminees ({len(results)} groupes)")
+    d.done(f"Baseline terminee ({len(results)} groupes)")
     return results
 
 
 if __name__ == "__main__":
-    grain   = os.getenv("GRAIN", "cluster")
+    grain   = os.getenv("GRAIN", "station")
     horizon = os.getenv("HORIZON")
     horizon = int(horizon) if horizon else 7
 

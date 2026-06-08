@@ -4,7 +4,13 @@ Tout ce qui peut varier (annees, encodages, noms de colonnes) vit ici, en un
 seul endroit. C'est le premier fichier a editer pour reconfigurer le pipeline.
 """
 
+import os
 from pathlib import Path
+
+GCP_PROJECT = os.getenv("GCP_PROJECT")
+GCP_REGION = os.getenv("GCP_REGION")
+BUCKET_NAME = os.getenv("BUCKET_NAME")
+MODEL_TARGET = os.getenv("MODEL_TARGET")
 
 # --------------------------------------------------------------------------- #
 # Chemins
