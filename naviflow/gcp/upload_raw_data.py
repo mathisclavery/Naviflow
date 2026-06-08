@@ -4,13 +4,17 @@
 # =============================================================================
 import os
 import time
+
 from google.cloud import storage
+
+from naviflow.config import (
+    GCP_PROJECT,
+    BUCKET_NAME
+)
 
 # -----------------------------------------------------------------------------
 # CONFIGURATION
 # -----------------------------------------------------------------------------
-PROJECT_ID  = "naviflow-pro"           # ID du projet GCP
-BUCKET_NAME = "naviflow-pro-mldl"      # Nom du bucket GCS
 LOCAL_FOLDER  = "raw_data"             # Dossier local à uploader
 BUCKET_FOLDER = "raw"                  # Dossier cible dans le bucket
 TIMEOUT     = 300                      # Timeout par fichier en secondes
@@ -21,7 +25,7 @@ MAX_RETRIES = 3                        # Nombre de tentatives en cas d'échec
 # Les credentials sont lus automatiquement depuis la variable d'environnement
 # GOOGLE_APPLICATION_CREDENTIALS
 # -----------------------------------------------------------------------------
-client = storage.Client(project=PROJECT_ID)
+client = storage.Client(project=GCP_PROJECT)
 bucket = client.bucket(BUCKET_NAME)
 
 # -----------------------------------------------------------------------------
@@ -57,7 +61,7 @@ def upload_file(local_path, blob_path):
         except Exception as e:
             print(f"  ⚠️  Tentative {attempt}/{MAX_RETRIES} échouée : {e}")
             time.sleep(5)  # Pause avant de réessayer
-            
+
     # Toutes les tentatives ont échoué
     print(f"  ❌ Échec définitif : {blob_path}")
     return False

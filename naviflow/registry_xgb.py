@@ -20,11 +20,18 @@ ET son results.csv.
 Modeles au format natif XGBoost (.json) : portable, leger, sans risque
 d'execution de code au chargement.
 """
+import io
+import joblib
 
 import pandas as pd
 from xgboost import XGBRegressor
 
-from naviflow.config import PROJECT_ROOT
+from naviflow.config import (
+    PROJECT_ROOT,
+    GCP_PROJECT,
+    BUCKET_NAME,
+    MODEL_TARGET
+)
 
 MODELS_STORE = PROJECT_ROOT / "models_store"
 
@@ -34,33 +41,54 @@ def _horizon_tag(horizon):
     return "j0" if horizon is None else f"j{horizon}"
 
 
-def run_dir(grain="station", horizon=None, train_from=None):
+def run_dir(grain="station", horizon=None, train_from=None, suffix=None):
     """Dossier du run pour une combinaison grain / horizon / periode.
 
     Nom : {grain}_{horizon}_{train_from}  (ex. station_j7_20220701, cluster_j0_all).
     """
     h = _horizon_tag(horizon)
     tf = (train_from or "all").replace("-", "")
-    return MODELS_STORE / f"{grain}_{h}_{tf}"
+    name = f"{grain}_{h}_{tf}"
+    if suffix:
+        name += f"_{suffix}"
+    return MODELS_STORE / name
 
+def _blob_name(group_id, grain="station", horizon=None, train_from=None):
+    """Chemin GCS (relatif) du modele, miroir de l'arbo locale."""
+    rel = run_dir(grain, horizon, train_from).relative_to(PROJECT_ROOT)
+    return f"{rel.as_posix()}/xgb_{group_id}.json"
 
 def model_path(group_id, grain="station", horizon=None, train_from=None):
     """Chemin du fichier modele d'un groupe, dans le sous-dossier de son run."""
     return run_dir(grain, horizon, train_from) / f"xgb_{group_id}.json"
 
 
-def results_path(grain="station", horizon=None, train_from=None):
+def results_path(grain="station", horizon=None, train_from=None, suffix=None):
     """Chemin du results.csv du run."""
-    return run_dir(grain, horizon, train_from) / "results.csv"
+    return run_dir(grain, horizon, train_from, suffix) / "results.csv"
 
 
 def save_model(model, group_id, grain="station", horizon=None, train_from=None):
     """Sauvegarde un XGBRegressor au format natif, dans le dossier du run."""
-    d = run_dir(grain, horizon, train_from)
-    d.mkdir(parents=True, exist_ok=True)
-    path = model_path(group_id, grain, horizon, train_from)
-    model.save_model(path)
-    return path
+    if MODEL_TARGET == "gcs":
+        from google.cloud import storage
+
+        # Format natif XGBoost -> bytes
+        model_bytes = bytearray(model.get_booster().save_raw())
+
+        storage_client = storage.Client(project=GCP_PROJECT)
+        bucket = storage_client.bucket(BUCKET_NAME)
+        destination_blob_name = _blob_name(group_id, grain, horizon, train_from)
+        blob = bucket.blob(destination_blob_name)
+
+        blob.upload_from_string(bytes(model_bytes), content_type="application/json")
+        return destination_blob_name
+    else:
+        d = run_dir(grain, horizon, train_from)
+        d.mkdir(parents=True, exist_ok=True)
+        path = model_path(group_id, grain, horizon, train_from)
+        model.save_model(path)
+        return path
 
 
 def load_model(group_id, grain="station", horizon=None, train_from=None):
@@ -73,9 +101,9 @@ def load_model(group_id, grain="station", horizon=None, train_from=None):
     return model
 
 
-def save_results(results, grain="station", horizon=None, train_from=None):
+def save_results(results, grain="station", horizon=None, train_from=None, suffix=None):
     """Ecrit le results.csv dans le sous-dossier du run."""
-    d = run_dir(grain, horizon, train_from)
+    d = run_dir(grain, horizon, train_from, suffix)
     d.mkdir(parents=True, exist_ok=True)
 
     if isinstance(results, dict):
@@ -88,6 +116,6 @@ def save_results(results, grain="station", horizon=None, train_from=None):
     df.insert(1, "horizon", _horizon_tag(horizon))
     df.insert(2, "train_from", train_from or "all")
 
-    path = results_path(grain, horizon, train_from)
+    path = results_path(grain, horizon, train_from,suffix)
     df.to_csv(path, index=False)
     return path

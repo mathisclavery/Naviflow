@@ -9,12 +9,20 @@ from naviflow.ml_logic.preprocess_xgb import prepare_xgb
 from naviflow.ml_logic.models.sklearn_models import run_xgboost
 from naviflow import registry_xgb
 from naviflow.utils import display as d
-from naviflow.config import TRAIN_FROM as DEFAULT_TRAIN_FROM
-
+from naviflow.config import (
+    GCP_PROJECT,
+    BUCKET_NAME,
+    MODEL_TARGET,
+    TRAIN_FROM as DEFAULT_TRAIN_FROM
+)
 
 def train_all(grain="station", n_clusters=4, lags=(1, 7, 30), horizon=7,
               n_iter=40, save=True, force=False):
     """Entraine UN modele multi-sortie par groupe, predisant J+1..J+horizon."""
+    from google.cloud import storage
+
+    storage_client = storage.Client(project=GCP_PROJECT)
+    bucket = storage_client.bucket(BUCKET_NAME)
 
     actual_train_from = os.getenv("TRAIN_FROM", DEFAULT_TRAIN_FROM)
     d.title(f"PIPELINE XGBOOST — grain={grain.upper()} | sortie=J+1..J+{horizon}")
@@ -39,9 +47,16 @@ def train_all(grain="station", n_clusters=4, lags=(1, 7, 30), horizon=7,
     for gid in pbar:
         pbar.set_postfix_str(f"{grain} {gid}")
 
-        if not force and save and registry_xgb.model_path(gid, grain, horizon, actual_train_from).exists():
-            skipped += 1
-            continue
+        if MODEL_TARGET == "gcs":
+            blob = bucket.blob(registry_xgb._blob_name(gid, grain, horizon, actual_train_from))
+
+            if not force and save and blob.exists():
+                skipped += 1
+                continue
+        else:
+            if not force and save and registry_xgb.model_path(gid, grain, horizon, actual_train_from).exists():
+                skipped += 1
+                continue
 
         df_group = df[df[group_col] == gid]
         if len(df_group) <= max(lags) + horizon + 1:

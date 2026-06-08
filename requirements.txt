@@ -16,4 +16,6 @@ plotly
 statsmodels
 pmdarima
 vacances-scolaires-france
+
+>>>>>>> master
 google-cloud-storage
