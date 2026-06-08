@@ -6,7 +6,8 @@ tensorflow
 matplotlib
 seaborn
 holidays
-
+tqdm
+fastapi
 
 ######
 #Clem

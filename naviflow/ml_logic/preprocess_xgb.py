@@ -2,9 +2,9 @@
 
 Part du DataFrame enrichi commun (feature_engineering.build_features) et :
   1. ajoute les lags (specifiques tabulaire : le RNN gere le passe autrement) ;
-  2. ajoute optionnellement la target horizon (prediction J+N) ;
+  2. ajoute la target multi-horizon (vecteur J+1 ... J+horizon) ;
   3. selectionne les colonnes de features ;
-  4. separe X / y ;
+  4. separe X / Y ;
   5. scale optionnellement (utile pour la regression lineaire, inutile pour XGBoost).
 
 Toutes les stations sont traitees ensemble (modele global tabulaire).
@@ -45,29 +45,36 @@ def add_lags(df, lags=(1, 7, 30), target=TARGET, group="ID_LIEU", date="JOUR"):
 
 
 def add_target_horizon(df, horizon=7, target=TARGET, group="ID_LIEU", date="JOUR"):
-    """Cree une target decalee de `horizon` jours dans le futur (target_jN).
+    """Cree une target par horizon : target_j1, target_j2, ..., target_j{horizon}.
 
-    Le modele apprend 'features d'aujourd'hui -> affluence dans N jours'.
-    Les NaN de fin de serie (pas de futur connu) sont supprimes.
+    Le modele apprend 'features d'aujourd'hui -> vecteur d'affluence J+1..J+H'.
+    Les NaN de fin de serie (pas de futur connu pour le plus grand horizon)
+    sont supprimes sur l'ensemble des targets pour garder X et Y alignes.
     """
     df = df.copy()
     df[date] = pd.to_datetime(df[date])
     df = df.sort_values([group, date])
 
-    target_col = f"target_j{horizon}"
-    df[target_col] = df.groupby(group)[target].shift(-horizon)
+    target_cols = []
+    for h in range(1, horizon + 1):
+        col = f"target_j{h}"
+        df[col] = df.groupby(group)[target].shift(-h)
+        target_cols.append(col)
 
-    return df.dropna(subset=[target_col])
+    return df.dropna(subset=target_cols)
 
 
 # --------------------------------------------------------------------------- #
-# 2. Mise en forme X / y
+# 2. Mise en forme X / Y
 # --------------------------------------------------------------------------- #
 
 
-def prepare_xgb(df, lags=(1, 7, 30), horizon=None, keep_id=False,
+def prepare_xgb(df, lags=(1, 7, 30), horizon=7, keep_id=False,
                 onehot_cluster=False, scale=False, as_numpy=False):
-    """Prépare X (2D) et y pour un modele tabulaire.
+    """Prépare X (2D) et Y (2D : une colonne par horizon J+1 ... J+horizon).
+
+    Pensé pour un XGBRegressor multi-sortie (multi_strategy='multi_output_tree')
+    qui predit le vecteur [J+1, ..., J+horizon] en une fois.
 
     Paramètres
     ----------
@@ -75,8 +82,8 @@ def prepare_xgb(df, lags=(1, 7, 30), horizon=None, keep_id=False,
 
     lags : décalages a créer. () ou None pour ne pas creer de lags.
 
-    horizon : si renseigné (ex. 7), créé target_j{horizon} et l'utilise comme y.
-              Si None, y = TARGET (prediction du jour courant).
+    horizon : nombre de jours a predire. Cree les targets target_j1..target_j{horizon}.
+              Y aura donc `horizon` colonnes.
 
     keep_id : si True, conserve ID_LIEU comme feature. A EVITER en general :
               ID_LIEU est un identifiant arbitraire, l'arbre lui donnerait un
@@ -88,14 +95,14 @@ def prepare_xgb(df, lags=(1, 7, 30), horizon=None, keep_id=False,
     scale : si True, applique un RobustScaler aux colonnes continues
             (utile pour la regression lineaire ; inutile pour XGBoost).
 
-    as_numpy : si True, renvoie (X_np, y_np, feature_names) au lieu de
-            (X_df, y_series). XGBoost convertit moins de memoire a partir de
+    as_numpy : si True, renvoie (X_np, Y_np, feature_names) au lieu de
+            (X_df, Y_df). XGBoost convertit moins de memoire a partir de
             numpy ; feature_names est conserve a part pour l'importance.
 
     Renvoie
     -------
-    (X, y) si as_numpy=False         -> X DataFrame, y Series.
-    (X_np, y_np, feature_names) sinon -> arrays numpy + liste des noms.
+    (X, Y) si as_numpy=False          -> X DataFrame, Y DataFrame (colonnes target_jN).
+    (X_np, Y_np, feature_names) sinon  -> arrays numpy + liste des noms.
     """
 
     df = df.copy()
@@ -103,11 +110,8 @@ def prepare_xgb(df, lags=(1, 7, 30), horizon=None, keep_id=False,
     if lags:
         df = add_lags(df, lags=lags)
 
-    if horizon is not None:
-        df = add_target_horizon(df, horizon=horizon)
-        target_col = f"target_j{horizon}"
-    else:
-        target_col = TARGET
+    df = add_target_horizon(df, horizon=horizon)
+    target_cols = [f"target_j{h}" for h in range(1, horizon + 1)]
 
     # One-hot du cluster si demande (avant la selection de colonnes)
     if onehot_cluster and "cluster" in df.columns:
@@ -115,11 +119,12 @@ def prepare_xgb(df, lags=(1, 7, 30), horizon=None, keep_id=False,
                                  prefix="cluster", dtype=int)
         df = pd.concat([df.drop(columns=["cluster"]), dummies], axis=1)
 
-    y = df[target_col]
+    dates = pd.to_datetime(df["JOUR"]).reset_index(drop=True)
 
-    # Colonnes a exclure des features
+    Y = df[target_cols].copy()
+
     drop_cols = set(NON_FEATURE_COLS)
-    drop_cols.add(target_col)
+    drop_cols.update(target_cols)
     if not keep_id:
         drop_cols.add("ID_LIEU")
 
@@ -131,6 +136,6 @@ def prepare_xgb(df, lags=(1, 7, 30), horizon=None, keep_id=False,
         X[cols] = RobustScaler().fit_transform(X[cols])
 
     if as_numpy:
-        return X.to_numpy(), y.to_numpy(), list(X.columns)
+        return X.to_numpy(), Y.to_numpy(), list(X.columns), dates.to_numpy()
 
-    return X, y
+    return X, Y, dates
