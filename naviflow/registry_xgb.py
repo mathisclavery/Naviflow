@@ -25,6 +25,10 @@ import joblib
 
 import pandas as pd
 from xgboost import XGBRegressor
+from google.cloud import storage
+from pathlib import Path
+import tempfile
+
 
 from naviflow.config import (
     PROJECT_ROOT,
@@ -71,7 +75,6 @@ def results_path(grain="station", horizon=None, train_from=None, suffix=None):
 def save_model(model, group_id, grain="station", horizon=None, train_from=None):
     """Sauvegarde un XGBRegressor au format natif, dans le dossier du run."""
     if MODEL_TARGET == "gcs":
-        from google.cloud import storage
 
         # Format natif XGBoost -> bytes
         model_bytes = bytearray(model.get_booster().save_raw())
@@ -109,6 +112,49 @@ def load_model(group_id, grain="station", horizon=None, train_from=None):
             raise FileNotFoundError(f"Aucun modele : {path}")
         model.load_model(path)
     return model
+
+
+def load_all_models(version: str = "20220101") -> dict:
+    models = {}
+    client = storage.Client()
+    bucket = client.bucket("naviflow-pro-mldl")
+    prefix = f"models_store/station_j7_{version}/"
+
+    for blob in bucket.list_blobs(prefix=prefix):
+        if not blob.name.endswith(".json"):
+            continue
+
+        station_id = int(Path(blob.name).stem[4:])
+
+        model = XGBRegressor()
+        model.load_model(bytearray(blob.download_as_bytes()))
+        models[station_id] = model
+
+    print(f"✅ {len(models)} models loaded from GCS (version {version})")
+    return models
+
+def load_all_features() -> dict:
+    features = {}
+
+    client = storage.Client()
+    bucket = client.bucket("naviflow-pro-mldl")
+    prefix = "features_store/"
+
+    blobs = list(bucket.list_blobs(prefix=prefix))
+
+    for blob in blobs:
+        if not blob.name.endswith(".parquet"):
+            continue
+
+        station_id = int(Path(blob.name).stem[7:])      # retire "X_test_" → "-1001" → -1001
+
+        buffer = io.BytesIO()
+        blob.download_to_file(buffer)
+        buffer.seek(0)
+        features[station_id] = pd.read_parquet(buffer)
+
+    print(f"✅ {len(features)} feature sets loaded from GCS")
+    return features
 
 
 def save_results(results, grain="station", horizon=None, train_from=None, suffix=None):

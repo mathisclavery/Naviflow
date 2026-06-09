@@ -63,7 +63,7 @@ def train_all(grain="station", n_clusters=4, lags=(1, 7, 30), horizon=7,
         if len(df_group) <= max(lags) + horizon + 1:
             continue
 
-        X_np, Y_np, _, dates_np = prepare_xgb(df_group, lags=lags, horizon=horizon, as_numpy=True, exclude_window=EXCLUDE_WINDOW)
+        X_np, Y_np, _, dates_np = prepare_xgb(df_group, lags=lags, horizon=horizon, as_numpy=True)
         res = run_xgboost(X_np, Y_np, dates_np, n_iter=n_iter)
 
         mae_pct = res["mae"] / res["y_test"].mean() * 100
