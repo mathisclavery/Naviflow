@@ -94,11 +94,11 @@ def run_baseline_weekday(df_group, horizon=7, lags=(1, 7, 30),
 #STRATEGY 2
 #prediction of several days of the week (2 to 7 max: M,T,W,T,F,S,S)
 
-def init_baseline_rnn(X_past, X_fut, y): #Advice Tim: ask 'X_fut' also as parameter even if not used here, to keep same structure
+def init_baseline_rnn_compatible_1(X_past, X_fut, y): #Advice Tim: ask 'X_fut' also as parameter even if not used here, to keep same structure
 
     # Branch 1 — Just input of the shape of the Xi
     inp_past = Input(shape=X_past.shape[1:])
-    print('X_past.shape[1:]',X_past.shape[1:])
+    #print('X_past.shape[1:]',X_past.shape[1:])
 
     if y.shape[1]-7 < 0: #ie if #days to predict < 7 days
         out = layers.Lambda(lambda x: x[:,-7:y.shape[1]-7,:NUMBER_STATIONS])(inp_past)
@@ -106,7 +106,7 @@ def init_baseline_rnn(X_past, X_fut, y): #Advice Tim: ask 'X_fut' also as parame
     else:
         out = layers.Lambda(lambda x: x[:,-7:,:NUMBER_STATIONS])(inp_past)
 
-    print('out.shape =', out.shape)
+    #print('out.shape =', out.shape)
 
     #BUILD OVERALL MODEL
     # Generic definition, but the Baseline is only a Sequential model
@@ -121,7 +121,7 @@ def init_baseline_rnn(X_past, X_fut, y): #Advice Tim: ask 'X_fut' also as parame
     return model
 
 
-def compute_score_baseline_rnn(model,X_past, y):
+def compute_score_baseline_rnn_compatible(model,X_past, y):
 
     y_pred = model.predict(X_past)
 
