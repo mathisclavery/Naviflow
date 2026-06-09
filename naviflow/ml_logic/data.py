@@ -7,6 +7,11 @@ from naviflow.ml_logic.sources.meteo import load_meteo
 from naviflow.ml_logic.sources.calendrier import load_calendrier
 from naviflow.config import TRAIN_FROM as DEFAULT_TRAIN_FROM
 
+from naviflow.ml_logic.preprocess_rnn import create_rnn_dataframe
+
+import json
+
+
 
 def get_data(train_from=None):
     """Charge et joint toutes les données du projet.
@@ -36,3 +41,25 @@ def get_data(train_from=None):
     df = df[df["JOUR"] >= pd.to_datetime(train_from)].reset_index(drop=True)
 
     return df
+
+
+def create_stations_dict(df,y):
+    """
+    df: original dataframe
+    y: target keras tensorflow - It last dimension shape is the number of stations to predict
+    """
+
+    #Simple way found to extract list of station columns
+    df_stations = create_rnn_dataframe(df,log=True)
+    list_id_lieu = df_stations.columns[:y.shape[2]]
+
+    dict_stations = {list_id_lieu[i] : df[df['ID_LIEU'] == list_id_lieu[i]].groupby(['LIBELLE_ARRET']).count().iloc[0].name for i in range(len(list_id_lieu))}
+
+    return dict_stations
+
+
+
+def save_stations_dict(dict):
+    with open('dict_stations.json', 'w') as f:
+        json.dump(dict, f)
+
