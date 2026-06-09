@@ -152,13 +152,13 @@ TRAIN_TEST_RATIO = 0.66
 
 
 #######################################################
-NUMBER_STATIONS = 100
+NUMBER_STATIONS = 708 #CR: All stations 20260606 = 708 (after removing Tram stations)
 
 #######################################################
 #X, y shapes variables
 
 #Number of past days before predict
-INPUT_LENGTH = 14
+INPUT_LENGTH = 140
 #Number of days to predict/horizon
 #NB: Assume no incubation/no gap between past and prediction days
 OUTPUT_LENGTH = 7
