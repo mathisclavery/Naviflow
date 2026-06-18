@@ -1,95 +1,117 @@
-# Naviflow — Prédiction de fréquentation du métro parisien
+# Naviflow
 
-Naviflow prédit le nombre de validations journalières par station de métro (J+1) à partir de données historiques IDFM, météo et calendrier.
+Prédiction de l'affluence journalière dans les stations de métro et RER parisiens — jusqu'à 7 jours à l'avance.
+
+![Python](https://img.shields.io/badge/Python-3.10-blue) ![XGBoost](https://img.shields.io/badge/model-XGBoost-orange) ![FastAPI](https://img.shields.io/badge/API-FastAPI-green)
 
 ---
 
-## Prérequis
+## Contexte
 
-- Python 3.10
-- Un compte Google Cloud avec accès au projet `naviflow-pro`
-- `gcloud` CLI installé ([guide d'installation](https://cloud.google.com/sdk/docs/install))
+Naviflow est le projet de fin de bootcamp réalisé avec [Le Wagon](https://www.lewagon.com/) en 2 semaines, en équipe de 3. L'idée de départ : les données de validation des transports parisiens sont publiques depuis 2015, et personne ne s'en sert vraiment pour de la prédiction opérationnelle. On voulait voir jusqu'où on pouvait aller.
+
+L'objectif est de prédire le nombre de validations journalières pour chacune des **708 stations de métro et RER d'Île-de-France**, avec un horizon de prédiction de J+1 à J+7.
+
+---
+
+## Comment ça marche
+
+Le pipeline se décompose en 3 grandes étapes :
+
+**1. Données**
+On agrège trois sources : les validations IDFM (2015–2025), la météo journalière de la station Paris-Montsouris (pluie, températures min/max/moy, vent) et un calendrier enrichi (jours fériés, vacances scolaires zone C, ponts). La période COVID (2020–2023) est exclue de l'entraînement car elle fausse complètement les patterns de fréquentation.
+
+**2. Feature engineering**
+Chaque ligne du dataset correspond à un couple (jour, station). Les features incluent des lags temporels (J-1, J-7, J-30), des encodages cycliques du calendrier (mois, jour de semaine), les variables météo brutes et des features binaires dérivées (pluie significative, vent fort, etc.). Pour le grain "cluster", les stations sont regroupées en 4 clusters KMeans selon leurs profils de trafic.
+
+**3. Modèles**
+Deux approches en parallèle :
+- **XGBoost** (modèle principal) — un `MultiOutputRegressor` par station ou par cluster, optimisé via `RandomizedSearchCV`. Prédit J+1 à J+7 en une seule passe.
+- **RNN encoder-decoder** (modèle alternatif) — prend 140 jours d'historique en entrée et prédit 7 jours. Entraîné sur toutes les stations simultanément.
+
+Les modèles sont servis via une **API FastAPI** déployée sur Cloud Run, et consommés par un frontend **Streamlit**.
+
+---
+
+## Stack technique
+
+| Couche | Technologies |
+|---|---|
+| Modélisation | XGBoost, Keras / TensorFlow |
+| API | FastAPI, Uvicorn |
+| Frontend | Streamlit |
+| Infrastructure | Google Cloud Storage, Cloud Run, Docker |
+| Data | IDFM open data, Météo-France, `holidays` (Python) |
+
+---
+
+## Sources de données
+
+- **Validations IDFM** : nombre de passages par station et par jour, de 2015 à 2025. Fichiers CSV/TXT par semestre ou trimestre selon les années — le format a changé plusieurs fois, d'où une couche de détection automatique dans le pipeline.
+- **Météo Paris-Montsouris** : données journalières Météo-France (station 75114001). Variables : RR (pluie), TN/TX/TM (températures), FFM (vent moyen).
+- **Calendrier** : jours fériés français, vacances scolaires zone C, week-ends, ponts détectés automatiquement.
 
 ---
 
 ## Installation
 
 ```bash
-git clone https://github.com/ton-repo/Naviflow.git
+git clone https://github.com/mathisclavery/Naviflow.git
 cd Naviflow
 pip install -r requirements.txt
 pip install -e .
 ```
 
----
+Créer un fichier `.env` à la racine (voir `.env.sample`) :
 
-## Configuration des credentials GCP
-
-Les données sont stockées dans un bucket Google Cloud Storage. Avant de lancer quoi que ce soit, configure tes credentials GCP.
-
-### Option A — Compte de service (recommandé si tu as un fichier `.json`)
-
-```bash
-export GOOGLE_APPLICATION_CREDENTIALS="/chemin/vers/ton-fichier.json"
+```
+GCP_PROJECT=...
+GCP_REGION=europe-west1
+BUCKET_NAME=...
+MODEL_TARGET=local   # ou gcs
 ```
 
-Pour que ce soit permanent, ajoute cette ligne à ton `~/.bashrc` ou `~/.zshrc` :
-
-```bash
-echo 'export GOOGLE_APPLICATION_CREDENTIALS="/chemin/vers/ton-fichier.json"' >> ~/.zshrc
-source ~/.zshrc
-```
-
-### Option B — Authentification personnelle via gcloud
+Configurer les credentials GCP :
 
 ```bash
 gcloud auth application-default login
 ```
 
-Une fenêtre s'ouvre dans ton navigateur — connecte-toi avec le compte Google associé au projet `naviflow-pro`.
-
-### Vérification
-
-```bash
-gcloud storage ls gs://naviflow-pro-mldl/
-```
-
-Tu dois voir `gs://naviflow-pro-mldl/raw/` s'afficher.
-
 ---
 
 ## Utilisation
 
-### 1. Télécharger les données depuis GCS
+### Télécharger les données
 
 ```bash
 make download
 ```
 
-Télécharge `raw_data/` depuis le bucket GCS vers ton disque local.
-Les fichiers déjà présents sont ignorés (reprise possible si interruption).
-
-### 2. Lancer la baseline
+### Entraîner XGBoost
 
 ```bash
-make baseline
+make train_xgb                          # par station, tout l'historique
+make train_xgb GRAIN=cluster            # par cluster (plus rapide)
+make train_xgb TRAIN_FROM=2024-01-01   # test rapide sur données récentes
+make train_xgb FORCE=1                  # réentraîner même si les modèles existent
 ```
 
-Entraîne deux modèles naïfs sur la station avec le plus de données :
-- **Baseline moyenne** : prédit toujours la moyenne historique
-- **Baseline lag J-7** : prédit l'affluence du même jour la semaine précédente
-
-Affiche MAE, R² et erreur relative — ce sont les scores plancher à battre.
-
-### 3. Autres commandes disponibles
+### Entraîner le RNN
 
 ```bash
-make preprocess   # charge les données + feature engineering
-make train        # entraîne XGBoost sur toutes les stations
-make evaluate     # affiche le résumé des métriques sauvegardées
-make predict      # prédit sur une station avec un modèle sauvegardé
-make upload_raw   # upload raw_data/ local vers GCS
+python -m naviflow.interface.main_rnn
 ```
+
+### Lancer l'API
+
+```bash
+uvicorn naviflow.api.api:app --reload
+```
+
+Endpoints disponibles :
+
+- `GET /ping` — health check
+- `GET /predict?station_id=<int>&prediction_date=<YYYY-MM-DD>` — retourne les prédictions J+1 à J+7
 
 ---
 
@@ -98,33 +120,33 @@ make upload_raw   # upload raw_data/ local vers GCS
 ```
 Naviflow/
 ├── naviflow/
-│   ├── interface/
-│   │   └── main.py          # point d'entrée CLI
+│   ├── api/                  # FastAPI
+│   ├── config.py             # toute la config en un seul endroit
+│   ├── gcp/                  # upload / download GCS
+│   ├── interface/            # points d'entrée CLI
 │   ├── ml_logic/
-│   │   ├── data.py           # chargement et jointure des données
+│   │   ├── data.py           # chargement et jointure des 3 sources
 │   │   ├── feature_engineering.py
 │   │   ├── preprocess_xgb.py
-│   │   └── models/
-│   │       ├── baselines.py  # modèles naïfs
-│   │       └── sklearn_models.py  # XGBoost
-│   ├── gcp/
-│   │   ├── gcs_loader.py     # téléchargement depuis GCS
-│   │   └── upload_raw_data.py
-│   ├── config.py
-│   └── params.py
-├── raw_data/                 # données locales (téléchargées via make download)
-├── models_store/             # modèles sauvegardés après make train
-├── requirements.txt
-├── Makefile
-└── setup.py
+│   │   ├── preprocess_rnn.py
+│   │   ├── models/           # xgboost, rnn, baselines
+│   │   └── sources/          # loaders par source (validations, meteo, calendrier)
+│   ├── registry_xgb.py
+│   └── registry_rnn.py
+├── models_store/             # modèles XGBoost en local
+├── rnn/models_store/         # modèles RNN en local
+├── notebooks/                # exploration et diagnostics
+├── Dockerfile
+└── Makefile
 ```
 
 ---
 
-## Sources de données
+## Déploiement
 
-| Source | Description |
-|--------|-------------|
-| IDFM validations | Nombre de validations par station et par jour (2015-2025) |
-| Météo-France | Données journalières Paris-Montsouris (RR, TN, TX, TM, FFM) |
-| Calendrier | Jours fériés, vacances scolaires, week-ends (zone C) |
+L'API est containerisée via Docker et déployée sur Google Cloud Run. Les modèles et les données brutes ne sont pas inclus dans l'image — ils sont chargés depuis GCS au démarrage.
+
+```bash
+docker build -t naviflow .
+docker run -e PORT=8080 -e MODEL_TARGET=gcs -e GCP_PROJECT=... -e BUCKET_NAME=... naviflow
+```
