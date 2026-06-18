@@ -2,13 +2,11 @@
 
 Prédiction de l'affluence journalière dans les stations de métro et RER parisiens — jusqu'à 7 jours à l'avance.
 
-![Python](https://img.shields.io/badge/Python-3.10-blue) ![XGBoost](https://img.shields.io/badge/model-XGBoost-orange) ![FastAPI](https://img.shields.io/badge/API-FastAPI-green)
-
 ---
 
 ## Contexte
 
-Naviflow est le projet de fin de bootcamp réalisé avec [Le Wagon](https://www.lewagon.com/) en 2 semaines, en équipe de 3. L'idée de départ : les données de validation des transports parisiens sont publiques depuis 2015, et personne ne s'en sert vraiment pour de la prédiction opérationnelle. On voulait voir jusqu'où on pouvait aller.
+Naviflow est le projet de fin de bootcamp réalisé avec [Le Wagon](https://www.lewagon.com/) en 2 semaines, en équipe de 4. L'idée de départ : les données de validation des transports parisiens sont publiques depuis 2015, et personne ne s'en sert vraiment pour de la prédiction opérationnelle. On voulait voir jusqu'où on pouvait aller en deux semaines.
 
 L'objectif est de prédire le nombre de validations journalières pour chacune des **708 stations de métro et RER d'Île-de-France**, avec un horizon de prédiction de J+1 à J+7.
 
@@ -19,7 +17,7 @@ L'objectif est de prédire le nombre de validations journalières pour chacune d
 Le pipeline se décompose en 3 grandes étapes :
 
 **1. Données**
-On agrège trois sources : les validations IDFM (2015–2025), la météo journalière de la station Paris-Montsouris (pluie, températures min/max/moy, vent) et un calendrier enrichi (jours fériés, vacances scolaires zone C, ponts). La période COVID (2020–2023) est exclue de l'entraînement car elle fausse complètement les patterns de fréquentation.
+On agrège trois sources : les validations IDFM (2015–2025), la météo journalière de la station Paris-Montsouris (pluie, températures min/max/moy, vent) et un calendrier enrichi (jours fériés, vacances scolaires zone C, ponts).
 
 **2. Feature engineering**
 Chaque ligne du dataset correspond à un couple (jour, station). Les features incluent des lags temporels (J-1, J-7, J-30), des encodages cycliques du calendrier (mois, jour de semaine), les variables météo brutes et des features binaires dérivées (pluie significative, vent fort, etc.). Pour le grain "cluster", les stations sont regroupées en 4 clusters KMeans selon leurs profils de trafic.
@@ -35,13 +33,11 @@ Les modèles sont servis via une **API FastAPI** déployée sur Cloud Run, et co
 
 ## Stack technique
 
-| Couche | Technologies |
-|---|---|
-| Modélisation | XGBoost, Keras / TensorFlow |
-| API | FastAPI, Uvicorn |
-| Frontend | Streamlit |
-| Infrastructure | Google Cloud Storage, Cloud Run, Docker |
-| Data | IDFM open data, Météo-France, `holidays` (Python) |
+ Modélisation : XGBoost, Keras / TensorFlow
+ API : FastAPI, Uvicorn
+ Frontend : Streamlit
+ Infrastructure : Google Cloud Storage, Cloud Run, Docker
+ Data : IDFM open data, Météo-France, `holidays` (Python)
 
 ---
 
