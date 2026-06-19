@@ -22,6 +22,8 @@ N_ITER     ?= 50
 HORIZON    ?=
 TRAIN_FROM ?= 2015-01-01
 FORCE      ?= 0
+LABEL      ?= reference
+NOTES      ?=
 
 train_xgb:
 	@GRAIN=$(GRAIN) N_ITER=$(N_ITER) HORIZON=$(HORIZON) \
@@ -31,6 +33,10 @@ train_xgb:
 baseline_xgb:
 	@GRAIN=$(GRAIN) HORIZON=$(HORIZON) TRAIN_FROM=$(TRAIN_FROM) \
 		python -m naviflow.interface.main_baselines
+
+eval:
+	@LABEL="$(LABEL)" NOTES="$(NOTES)" \
+		python -m naviflow.interface.main_eval
 
 download:
 	python -m naviflow.gcp.main_gcp download
