@@ -35,8 +35,12 @@ baseline_xgb:
 		python -m naviflow.interface.main_baselines
 
 eval:
-	@LABEL="$(LABEL)" NOTES="$(NOTES)" \
+	@LABEL="$(LABEL)" NOTES="$(NOTES)" LAGS="$(LAGS)" ROLLS="$(ROLLS)" LOG_TARGET="$(LOG_TARGET)" GLOBAL="$(GLOBAL)" ALL="$(ALL)" \
 		python -m naviflow.interface.main_eval
+
+tune_global:
+	@N_ITER="$(N_ITER)" LAGS="$(LAGS)" ROLLS="$(ROLLS)" \
+		python -m naviflow.interface.main_tune_global
 
 download:
 	python -m naviflow.gcp.main_gcp download

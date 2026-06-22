@@ -1,0 +1,43 @@
+{
+  "generated_on": "2026-06-22",
+  "method": "random search on pooled global model, scored by mean (over walk-forward folds) of median per-station MAE%",
+  "params": {
+    "n_iter": 30,
+    "horizon": 7,
+    "lags": [
+      1,
+      2,
+      3,
+      4,
+      5,
+      6,
+      7
+    ],
+    "rolls": [
+      7,
+      14,
+      30
+    ],
+    "train_from": "2023-01-01",
+    "test_size": 0.2,
+    "n_folds": 3,
+    "n_stations": 40
+  },
+  "val_mae_pct_mean": 13.226666666666667,
+  "val_fold_scores": [
+    14.44,
+    13.15,
+    12.09
+  ],
+  "consensus_params": {
+    "n_estimators": 1200,
+    "max_depth": 12,
+    "learning_rate": 0.02,
+    "subsample": 0.7,
+    "colsample_bytree": 1.0,
+    "min_child_weight": 1,
+    "gamma": 0.5,
+    "reg_alpha": 0.1,
+    "reg_lambda": 3.0
+  }
+}
