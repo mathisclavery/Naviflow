@@ -1,0 +1,13 @@
+# Dépendances STRICTES de l'API de production (modèle global).
+# L'API ne fait que charger le bundle (xgboost) + les features (parquet) depuis
+# GCS et prédire — pas de tensorflow/sklearn/plotting (cf. requirements.txt, lourd,
+# réservé à l'entraînement/exploration). Garde l'image Docker légère.
+fastapi
+uvicorn
+pandas>=2.0
+numpy
+scikit-learn
+xgboost
+pyarrow
+joblib
+google-cloud-storage

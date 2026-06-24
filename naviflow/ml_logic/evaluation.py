@@ -11,7 +11,7 @@ XGBoost sans relancer un entrainement complet :
   2. (à venir) `aggregate_metrics()` et `log_experiment()` : agregation des
      metriques entre stations et journal d'experiences.
 
-Rien ici ne touche au pipeline de prod (`main_xgb.py`, `registry_xgb.py`).
+Ce module sert l'expérimentation ; la prod vit dans `global_model.py`.
 L'echantillon est fige sur disque (`naviflow/eval/sample_stations.json`) pour
 que toutes les ablations soient comparees sur EXACTEMENT les memes stations.
 """
@@ -26,12 +26,11 @@ from tqdm import tqdm
 from xgboost import XGBRegressor
 from sklearn.metrics import mean_absolute_error, r2_score
 
-from naviflow.config import PROJECT_ROOT, N_CLUSTERS_DEFAULT, TARGET
+from naviflow.config import PROJECT_ROOT, N_CLUSTERS_DEFAULT
 from naviflow.ml_logic.data import get_data
-from naviflow.ml_logic.feature_engineering import (
-    cluster_stations, build_features, build_station_profiles,
-)
+from naviflow.ml_logic.feature_engineering import cluster_stations, build_features
 from naviflow.ml_logic.preprocess_xgb import prepare_xgb
+from naviflow.ml_logic.global_model import build_pooled_matrix
 from naviflow.ml_logic.models.sklearn_models import run_xgboost
 from naviflow.utils import display as d
 
@@ -321,77 +320,6 @@ def fit_xgb_frozen(X, Y, dates, params, test_size=0.2, random_state=67,
     return _per_station_metrics(y_test, y_pred)
 
 
-def _build_pooled_matrix(df, station_ids, level_cutoff, horizon=7, lags=(1, 7, 30),
-                         rolls=(), normalize=True, add_profiles=True):
-    """Empile les lignes de toutes les stations en UN jeu (X, Y) poolé et normalisé.
-
-    `level_cutoff` : seuls les jours STRICTEMENT antérieurs servent à calculer le
-    niveau de chaque station (moyenne de la cible) et ses profils — garantit que
-    la normalisation ne fuit pas d'info future (ni du test, ni de la validation).
-
-    Renvoie (X, Y_abs, gids, dates, feature_names, lvl) :
-      X         : features poolées, déjà normalisées (lags/rolls ÷ niveau) si demandé.
-      Y_abs     : cible EN ABSOLU (non normalisée) — pour des métriques en absolu.
-      gids      : id station de chaque ligne (pour les métriques par station).
-      dates     : JOUR de chaque ligne (pour le split temporel).
-      lvl       : niveau station de chaque ligne (pour (dé)normaliser la cible).
-    """
-    train_df = df[pd.to_datetime(df["JOUR"]) < level_cutoff]
-    levels = train_df.groupby("ID_LIEU")[TARGET].mean()
-
-    prof_cols = ["log_vald", "cv", "ratio_we_sem",
-                 "ratio_vac_horsvac", "creux_estival"]
-    profiles = (build_station_profiles(train_df).set_index("ID_LIEU")[prof_cols]
-                if add_profiles else None)
-
-    # Pré-groupage : une seule passe au lieu d'un scan complet par station.
-    groups = dict(tuple(df.groupby("ID_LIEU", sort=False)))
-
-    X_parts, Y_parts, gid_parts, date_parts, lvl_parts = [], [], [], [], []
-    feature_names = None
-    min_hist = max(list(lags) + list(rolls) + [1])
-
-    for gid in station_ids:
-        if gid not in levels.index or levels[gid] <= 0:
-            continue
-        if add_profiles and gid not in profiles.index:
-            continue
-        df_group = groups.get(gid)
-        if df_group is None or len(df_group) <= min_hist + horizon + 1:
-            continue
-
-        X_np, Y_np, names, dates_np = prepare_xgb(
-            df_group, lags=lags, rolls=rolls, horizon=horizon, as_numpy=True)
-
-        if add_profiles:
-            prof_row = profiles.loc[gid].to_numpy(dtype=float)
-            prof_block = np.tile(prof_row, (len(X_np), 1))
-            X_np = np.hstack([X_np, prof_block])
-            if feature_names is None:
-                feature_names = list(names) + prof_cols
-        elif feature_names is None:
-            feature_names = list(names)
-
-        X_parts.append(X_np)
-        Y_parts.append(Y_np)
-        gid_parts.append(np.full(len(X_np), gid))
-        date_parts.append(dates_np)
-        lvl_parts.append(np.full(len(X_np), levels[gid]))
-
-    X = np.vstack(X_parts).astype(float)
-    Y_abs = np.vstack(Y_parts).astype(float)
-    gids = np.concatenate(gid_parts)
-    dates = np.concatenate(date_parts).astype("datetime64[ns]")
-    lvl = np.concatenate(lvl_parts)
-
-    if normalize:
-        lag_idx = [i for i, n in enumerate(feature_names)
-                   if n.startswith("lag_") or n.startswith("roll_")]
-        if lag_idx:
-            X[:, lag_idx] = X[:, lag_idx] / lvl[:, None]
-
-    return X, Y_abs, gids, dates, feature_names, lvl
-
 
 def _fit_predict_pooled(X, Y_fit, train_mask, eval_mask, params, lvl, normalize,
                         random_state=67, multi_strategy="multi_output_tree"):
@@ -413,7 +341,8 @@ def _fit_predict_pooled(X, Y_fit, train_mask, eval_mask, params, lvl, normalize,
 
 def fit_xgb_global(df, station_ids, params, horizon=7, lags=(1, 7, 30), rolls=(),
                    test_size=0.2, random_state=67, normalize=True,
-                   add_profiles=True, multi_strategy="multi_output_tree"):
+                   add_profiles=True, multi_strategy="multi_output_tree",
+                   test_cutoff_date=None, exclude_window=None):
     """Entraîne UN SEUL XGBoost sur TOUTES les stations poolées (approche panel).
 
     Contrairement à fit_xgb_frozen (un modèle par station, ~800 points chacun),
@@ -432,14 +361,24 @@ def fit_xgb_global(df, station_ids, params, horizon=7, lags=(1, 7, 30), rolls=()
     cv, ratios we/vacances/été) calculées sur le TRAIN, pour situer chaque
     station sur un continuum (substitut « doux » à un one-hot des 708 stations).
 
+    test_cutoff_date : date FIXE de début de test (str/Timestamp). Si fournie, elle
+    prime sur test_size — indispensable pour comparer équitablement deux fenêtres
+    d'entraînement (2015+ vs 2023+) sur EXACTEMENT le même jeu de test.
+
+    exclude_window : (debut, fin) à retirer des données (ex. période COVID).
+
     Renvoie un dict {station_id: métriques} au format de `_per_station_metrics`.
     """
-    unique_days = np.sort(pd.to_datetime(df["JOUR"]).unique())
-    cutoff = unique_days[int(len(unique_days) * (1 - test_size))]
+    if test_cutoff_date is not None:
+        cutoff = np.datetime64(pd.Timestamp(test_cutoff_date))
+    else:
+        unique_days = np.sort(pd.to_datetime(df["JOUR"]).unique())
+        cutoff = unique_days[int(len(unique_days) * (1 - test_size))]
 
-    X, Y_abs, gids, dates, _, lvl = _build_pooled_matrix(
+    X, Y_abs, gids, dates, _, lvl = build_pooled_matrix(
         df, station_ids, level_cutoff=cutoff, horizon=horizon, lags=lags,
-        rolls=rolls, normalize=normalize, add_profiles=add_profiles)
+        rolls=rolls, normalize=normalize, add_profiles=add_profiles,
+        exclude_window=exclude_window)
 
     Y_fit = Y_abs / lvl[:, None] if normalize else Y_abs
     train_mask = dates < cutoff
@@ -522,12 +461,12 @@ def tune_global(n_iter=30, horizon=7, lags=(1, 2, 3, 4, 5, 6, 7), rolls=(7, 14, 
     # fait un 1er passage léger (sans normalisation ni profils) juste pour les
     # obtenir, on en dérive les folds, puis on (re)construit le jeu avec le bon cutoff.
     d.step("Construction du jeu poolé")
-    _, _, _, dates_probe, _, _ = _build_pooled_matrix(
+    _, _, _, dates_probe, _, _ = build_pooled_matrix(
         df, station_ids, level_cutoff=test_cutoff, horizon=horizon, lags=lags,
         rolls=rolls, normalize=False, add_profiles=False)
     folds, level_cutoff = _walk_forward_folds(dates_probe, test_cutoff, n_folds=n_folds)
 
-    X, Y_abs, gids, dates, _, lvl = _build_pooled_matrix(
+    X, Y_abs, gids, dates, _, lvl = build_pooled_matrix(
         df, station_ids, level_cutoff=level_cutoff, horizon=horizon, lags=lags,
         rolls=rolls, normalize=True, add_profiles=True)
     Y_fit = Y_abs / lvl[:, None]

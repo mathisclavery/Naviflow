@@ -21,6 +21,7 @@ Modeles au format natif XGBoost (.json) : portable, leger, sans risque
 d'execution de code au chargement.
 """
 import io
+import json
 import joblib
 
 import pandas as pd
@@ -114,49 +115,6 @@ def load_model(group_id, grain="station", horizon=None, train_from=None):
     return model
 
 
-def load_all_models(version: str = "20220101") -> dict:
-    models = {}
-    client = storage.Client()
-    bucket = client.bucket("naviflow-pro-mldl")
-    prefix = f"models_store/station_j7_{version}/"
-
-    for blob in bucket.list_blobs(prefix=prefix):
-        if not blob.name.endswith(".json"):
-            continue
-
-        station_id = int(Path(blob.name).stem[4:])
-
-        model = XGBRegressor()
-        model.load_model(bytearray(blob.download_as_bytes()))
-        models[station_id] = model
-
-    print(f"✅ {len(models)} models loaded from GCS (version {version})")
-    return models
-
-def load_all_features() -> dict:
-    features = {}
-
-    client = storage.Client()
-    bucket = client.bucket("naviflow-pro-mldl")
-    prefix = "features_store/"
-
-    blobs = list(bucket.list_blobs(prefix=prefix))
-
-    for blob in blobs:
-        if not blob.name.endswith(".parquet"):
-            continue
-
-        station_id = int(Path(blob.name).stem[7:])      # retire "X_test_" → "-1001" → -1001
-
-        buffer = io.BytesIO()
-        blob.download_to_file(buffer)
-        buffer.seek(0)
-        features[station_id] = pd.read_parquet(buffer)
-
-    print(f"✅ {len(features)} feature sets loaded from GCS")
-    return features
-
-
 def save_results(results, grain="station", horizon=None, train_from=None, suffix=None):
     """Ecrit le results.csv dans le sous-dossier du run."""
     d = run_dir(grain, horizon, train_from, suffix)
@@ -175,3 +133,132 @@ def save_results(results, grain="station", horizon=None, train_from=None, suffix
     path = results_path(grain, horizon, train_from,suffix)
     df.to_csv(path, index=False)
     return path
+
+
+# --------------------------------------------------------------------------- #
+# Modele GLOBAL poole : un seul run contenant modele + niveaux + profils + meta
+# --------------------------------------------------------------------------- #
+# Le modele global n'est PAS un modele par groupe : son run_dir (global_j{H}_...)
+# contient un unique bundle. On serialise tout en JSON natif (pas de pickle) :
+#   xgb_global.json  booster XGBoost natif
+#   levels.json      {station_id: niveau} pour (de)normaliser
+#   profiles.json    {station_id: {profil: valeur}} (features d'identite)
+#   meta.json        {feature_names, lags, rolls, horizon}
+_GLOBAL_FILES = {"model": "xgb_global.json", "levels": "levels.json",
+                 "profiles": "profiles.json", "meta": "meta.json"}
+
+
+def _global_payload(bundle):
+    """Convertit le bundle (objets pandas/XGBoost) en dict JSON-serialisables."""
+    levels = {int(k): float(v) for k, v in bundle["levels"].items()}
+    profiles = {int(k): {c: float(x) for c, x in row.items()}
+                for k, row in bundle["profiles"].to_dict(orient="index").items()}
+    meta = {**bundle["meta"], "feature_names": list(bundle["feature_names"])}
+    return levels, profiles, meta
+
+
+def save_global_bundle(bundle, train_from=None):
+    """Sauvegarde le bundle du modele global (local ou GCS selon MODEL_TARGET)."""
+    horizon = bundle["meta"]["horizon"]
+    model = bundle["model"]
+    levels, profiles, meta = _global_payload(bundle)
+    blobs = {"levels": json.dumps(levels), "profiles": json.dumps(profiles),
+             "meta": json.dumps(meta)}
+
+    if MODEL_TARGET == "gcs":
+        rel = run_dir("global", horizon, train_from).relative_to(PROJECT_ROOT).as_posix()
+        client = storage.Client(project=GCP_PROJECT)
+        bucket = client.bucket(BUCKET_NAME)
+        bucket.blob(f"{rel}/{_GLOBAL_FILES['model']}").upload_from_string(
+            bytes(bytearray(model.get_booster().save_raw())), content_type="application/json")
+        for key, text in blobs.items():
+            bucket.blob(f"{rel}/{_GLOBAL_FILES[key]}").upload_from_string(
+                text, content_type="application/json")
+        return f"gs://{BUCKET_NAME}/{rel}"
+
+    d = run_dir("global", horizon, train_from)
+    d.mkdir(parents=True, exist_ok=True)
+    model.save_model(d / _GLOBAL_FILES["model"])
+    for key, text in blobs.items():
+        (d / _GLOBAL_FILES[key]).write_text(text)
+    return d
+
+
+def load_global_bundle(train_from=None, horizon=7):
+    """Recharge le bundle du modele global (local ou GCS selon MODEL_TARGET)."""
+    model = XGBRegressor()
+
+    if MODEL_TARGET == "gcs":
+        rel = run_dir("global", horizon, train_from).relative_to(PROJECT_ROOT).as_posix()
+        client = storage.Client(project=GCP_PROJECT)
+        bucket = client.bucket(BUCKET_NAME)
+        model.load_model(bytearray(
+            bucket.blob(f"{rel}/{_GLOBAL_FILES['model']}").download_as_bytes()))
+        texts = {key: bucket.blob(f"{rel}/{_GLOBAL_FILES[key]}").download_as_text()
+                 for key in ("levels", "profiles", "meta")}
+    else:
+        d = run_dir("global", horizon, train_from)
+        model_path_ = d / _GLOBAL_FILES["model"]
+        if not model_path_.exists():
+            raise FileNotFoundError(f"Aucun modele global : {model_path_}")
+        model.load_model(model_path_)
+        texts = {key: (d / _GLOBAL_FILES[key]).read_text()
+                 for key in ("levels", "profiles", "meta")}
+
+    levels = pd.Series({int(k): v for k, v in json.loads(texts["levels"]).items()})
+    profiles = pd.DataFrame.from_dict(json.loads(texts["profiles"]), orient="index")
+    profiles.index = profiles.index.astype(int)
+    meta = json.loads(texts["meta"])
+    return {"model": model, "levels": levels, "profiles": profiles,
+            "feature_names": meta["feature_names"], "meta": meta}
+
+
+# --------------------------------------------------------------------------- #
+# Features de SERVICE du modele global (pre-calculees, normalisees)
+# --------------------------------------------------------------------------- #
+# Un parquet par station (JOUR + colonnes de features deja normalisees), range
+# dans le sous-dossier features/ du run global. L'API les charge pour servir une
+# date donnee sans recalculer.
+def _global_features_dir(horizon=7, train_from=None):
+    return run_dir("global", horizon, train_from) / "features"
+
+
+def save_global_features(features_by_station, train_from=None, horizon=7):
+    """Sauvegarde les features de service (dict {station_id: DataFrame})."""
+    if MODEL_TARGET == "gcs":
+        rel = _global_features_dir(horizon, train_from).relative_to(PROJECT_ROOT).as_posix()
+        client = storage.Client(project=GCP_PROJECT)
+        bucket = client.bucket(BUCKET_NAME)
+        for gid, df_feat in features_by_station.items():
+            buffer = io.BytesIO()
+            df_feat.to_parquet(buffer, index=False)
+            buffer.seek(0)
+            bucket.blob(f"{rel}/X_{gid}.parquet").upload_from_file(
+                buffer, content_type="application/octet-stream")
+        return f"gs://{BUCKET_NAME}/{rel}"
+
+    d = _global_features_dir(horizon, train_from)
+    d.mkdir(parents=True, exist_ok=True)
+    for gid, df_feat in features_by_station.items():
+        df_feat.to_parquet(d / f"X_{gid}.parquet", index=False)
+    return d
+
+
+def load_global_features(train_from=None, horizon=7):
+    """Recharge les features de service : dict {station_id: DataFrame}."""
+    features = {}
+    if MODEL_TARGET == "gcs":
+        rel = _global_features_dir(horizon, train_from).relative_to(PROJECT_ROOT).as_posix()
+        client = storage.Client(project=GCP_PROJECT)
+        bucket = client.bucket(BUCKET_NAME)
+        for blob in bucket.list_blobs(prefix=f"{rel}/"):
+            if not blob.name.endswith(".parquet"):
+                continue
+            gid = int(Path(blob.name).stem[2:])  # "X_<id>" -> id
+            buffer = io.BytesIO(blob.download_as_bytes())
+            features[gid] = pd.read_parquet(buffer)
+    else:
+        d = _global_features_dir(horizon, train_from)
+        for path in d.glob("X_*.parquet"):
+            features[int(path.stem[2:])] = pd.read_parquet(path)
+    return features

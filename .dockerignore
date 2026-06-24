@@ -1,0 +1,15 @@
+# Artefacts lourds chargés depuis GCS au runtime — pas dans l'image
+models_store/
+rnn/models_store/
+raw_data/
+
+# Dev / hors production
+.git/
+notebooks/
+tests/
+experiments/
+*.egg-info/
+__pycache__/
+*.pyc
+.env
+.ipynb_checkpoints/
