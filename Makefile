@@ -23,6 +23,9 @@ train_xgb_global:
 save_features_global:
 	@DAYS=$(DAYS) python -m naviflow.interface.main_save_features_global
 
+eval_per_station:
+	@MODEL_TARGET=local python -m naviflow.interface.main_eval_per_station
+
 baseline_xgb:
 	@GRAIN=$(GRAIN) HORIZON=$(HORIZON) TRAIN_FROM=$(TRAIN_FROM) \
 		python -m naviflow.interface.main_baselines
