@@ -72,6 +72,13 @@ TRAIN_FROM = "2015-01-01"
 #Dates covid à exclure
 EXCLUDE_WINDOW = ["2020-01-01", "2023-01-01"]
 
+# Cutoff de DÉPLOIEMENT : le modèle de prod s'entraîne sur les données AVANT cette
+# date, et la démo (features de service) ne sert que les dates À PARTIR de cette
+# date. Ainsi la démo prédit des jours JAMAIS vus à l'entraînement (pas de leakage),
+# et la perf affichée correspond au test held-out de l'évaluation. Mettre à None
+# pour un déploiement « live » (réentraînement sur tout, prédiction du vrai futur).
+DEPLOY_TEST_CUTOFF = "2025-05-26"
+
 # Ratio qui determine si les deux ID qui se chevauchent sont complémentaires ou doublons.
 RATIO_DOUBLON = 0.65
 

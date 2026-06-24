@@ -44,6 +44,31 @@ def add_lags(df, lags=(1, 7, 30), target=TARGET, group="ID_LIEU", date="JOUR"):
     return df.dropna(subset=[f"lag_{lag}" for lag in lags])
 
 
+def add_rolling(df, windows=(7, 30), target=TARGET, group="ID_LIEU", date="JOUR"):
+    """Ajoute des moyennes glissantes roll_{w} calculées PAR STATION.
+
+    Chaque roll_{w} est la moyenne de la cible sur les `w` jours PRÉCÉDENTS
+    (fenêtre se terminant hier) : on applique shift(1) AVANT le rolling pour ne
+    jamais inclure la valeur du jour courant — sinon fuite, le modèle ne connaît
+    au mieux que lag_1 à l'instant de prédiction. Capture la tendance de fond que
+    les lags ponctuels ratent.
+
+    Les NaN de début de série (fenêtre incomplète) sont supprimés.
+    """
+    df = df.copy()
+    df[date] = pd.to_datetime(df[date])
+    df = df.sort_values([group, date])
+
+    shifted = df.groupby(group)[target].shift(1)
+    roll_cols = []
+    for w in windows:
+        col = f"roll_{w}"
+        df[col] = shifted.groupby(df[group]).rolling(w).mean().reset_index(level=0, drop=True)
+        roll_cols.append(col)
+
+    return df.dropna(subset=roll_cols)
+
+
 def add_target_horizon(df, horizon=7, target=TARGET, group="ID_LIEU", date="JOUR"):
     """Cree une target par horizon : target_j1, target_j2, ..., target_j{horizon}.
 
@@ -69,7 +94,7 @@ def add_target_horizon(df, horizon=7, target=TARGET, group="ID_LIEU", date="JOUR
 # --------------------------------------------------------------------------- #
 
 
-def prepare_xgb(df, lags=(1, 7, 30), horizon=7, keep_id=False,
+def prepare_xgb(df, lags=(1, 7, 30), rolls=(), horizon=7, keep_id=False,
                 onehot_cluster=False, scale=False, as_numpy=False,
                 exclude_window=None):
     """Prépare X (2D) et Y (2D : une colonne par horizon J+1 ... J+horizon).
@@ -82,6 +107,8 @@ def prepare_xgb(df, lags=(1, 7, 30), horizon=7, keep_id=False,
     df : DataFrame enrichi issu de feature_engineering.build_features().
 
     lags : décalages a créer. () ou None pour ne pas creer de lags.
+
+    rolls : fenêtres de moyenne glissante (roll_{w}) à créer. () pour aucune.
 
     horizon : nombre de jours a predire. Cree les targets target_j1..target_j{horizon}.
               Y aura donc `horizon` colonnes.
@@ -114,6 +141,9 @@ def prepare_xgb(df, lags=(1, 7, 30), horizon=7, keep_id=False,
 
     if lags:
         df = add_lags(df, lags=lags)
+
+    if rolls:
+        df = add_rolling(df, windows=rolls)
 
     df = add_target_horizon(df, horizon=horizon)
     target_cols = [f"target_j{h}" for h in range(1, horizon + 1)]

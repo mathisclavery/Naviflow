@@ -2,6 +2,9 @@
 raw_data/
 models_store/
 
+# Journal d'experiences (sortie locale, regeneree a chaque run)
+experiments/
+
 # Byte-compiled / optimized / DLL files
 __pycache__/
 *.py[cod]
